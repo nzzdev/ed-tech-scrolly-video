@@ -17,9 +17,8 @@ class ScrollyVideo {
   constructor({
     src, // The src of the video, required
     scrollyVideoContainer, // The dom element or id that this object will be created in, required
-    cover = true, // Whether the video should "cover" inside the container
+    objectFit = 'contain', // Whether the video should "cover" inside the container
     sticky = true, // Whether the video should "stick" to the top of the container
-    full = true, // Whether the container should expand to 100vh and 100vw
     trackScroll = true, // Whether this object should automatically respond to scroll
     lockScroll = true, // Whether it ignores human scroll while it runs `setVideoPercentage` with enabled `trackScroll`
     transitionSpeed = 8, // How fast the video transitions between points
@@ -64,7 +63,7 @@ class ScrollyVideo {
     this.transitionSpeed = transitionSpeed;
     this.frameThreshold = frameThreshold;
     this.useWebCodecs = useWebCodecs;
-    this.cover = cover;
+    this.objectFit = objectFit;
     this.sticky = sticky;
     this.trackScroll = trackScroll;
     this.onReady = onReady;
@@ -84,28 +83,30 @@ class ScrollyVideo {
     this.video.pause();
     this.video.load();
 
-    // Start the video percentage at 0
-    this.videoPercentage = 0;
-
     // Adds the video to the container
-    this.container.appendChild(this.video);
+    const layoutContainer = document.createElement('div');
+    layoutContainer.style.display = 'flex';
+    layoutContainer.style.justifyContent = 'center';
+    layoutContainer.style.width = '100%';
+    layoutContainer.style.height = '100vh';
 
-    // Setting CSS properties for sticky
-    if (sticky) {
-      this.container.style.display = 'block';
-      this.container.style.position = 'sticky';
-      this.container.style.top = '0';
-    }
+    this.container.appendChild(layoutContainer);
 
-    // Setting CSS properties for full
-    if (full) {
-      this.container.style.width = '100%';
-      this.container.style.height = '100vh';
-      this.container.style.overflow = 'hidden';
-    }
+    layoutContainer.appendChild(this.video);
+    this.cavnasContainer = document.createElement('div');
+    layoutContainer.appendChild(this.cavnasContainer);
+
+    // Setting CSS properties for container
+    this.container.style.display = 'block';
+    this.container.style.position = 'sticky';
+    this.container.style.top = '0';
+    this.container.style.width = '100%';
+    this.container.style.height = '100vh';
+    this.container.style.overflow = 'hidden';
 
     // Setting CSS properties for cover
-    if (cover) this.setCoverStyle(this.video);
+    this.setCoverStyle(this.video);
+    this.videoDimensions = this.video.getBoundingClientRect();
 
     // Detect webkit (safari), because webkit requires special attention
     const browserEngine = new UAParser().getEngine();
@@ -177,7 +178,7 @@ class ScrollyVideo {
     this.resize = () => {
       if (this.debug) console.info('ScrollyVideo resizing...');
       // On resize, we need to reset the cover style
-      if (this.cover) this.setCoverStyle(this.canvas || this.video);
+      this.setCoverStyle(this.video);
       // Then repaint the canvas, if we are in useWebcodecs
       this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
     };
@@ -200,9 +201,6 @@ class ScrollyVideo {
    *    - easing: (progress: number) => number - A function that defines the easing curve for the transition. It takes the progress ratio (a number between 0 and 1) as an argument and returns the eased value, affecting the playback speed during the transition.
    */
   setVideoPercentage(percentage, options = {}) {
-    // Early termination if the video percentage is already at the percentage that is intended.
-    if (this.videoPercentage === percentage) return;
-
     if (this.transitioningRaf) {
       // eslint-disable-next-line no-undef
       window.cancelAnimationFrame(this.transitioningRaf);
@@ -225,40 +223,8 @@ class ScrollyVideo {
    * @param el
    */
   setCoverStyle(el) {
-    if (this.cover) {
-      /* eslint-disable no-param-reassign */
-      el.style.position = 'absolute';
-      el.style.top = '50%';
-      el.style.left = '50%';
-      el.style.transform = 'translate(-50%, -50%)';
-      el.style.minWidth = '101%';
-      el.style.minHeight = '101%';
-
-      // Gets the width and height of the container
-      const { width: containerWidth, height: containerHeight } =
-        this.container.getBoundingClientRect();
-
-      // Gets the width and height of the video frames
-      const width = el.videoWidth || el.width;
-      const height = el.videoHeight || el.height;
-
-      if (this.debug)
-        console.info('Container dimensions:', [
-          containerWidth,
-          containerHeight,
-        ]);
-      if (this.debug) console.info('Element dimensions:', [width, height]);
-
-      // Determines which axis needs to be 100% and which needs to be scaled
-      if (containerWidth / containerHeight > width / height) {
-        el.style.width = '100%';
-        el.style.height = 'auto';
-      } else {
-        el.style.height = '100%';
-        el.style.width = 'auto';
-      }
-      /* eslint-enable no-param-reassign */
-    }
+    el.style.width = '100%';
+    el.style.objectFit = this.objectFit;
   }
 
   /**
@@ -309,7 +275,6 @@ class ScrollyVideo {
     // Calculate the frameRate based on number of frames and the duration
     this.frameRate = this.frames.length / this.video.duration;
     if (this.debug) console.info('Received', this.frames.length, 'frames');
-
     // Remove the video and add the canvas
     // eslint-disable-next-line no-undef
     this.canvas = document.createElement('canvas');
@@ -317,8 +282,7 @@ class ScrollyVideo {
 
     // Hide the video and add the canvas to the container
     this.video.style.display = 'none';
-    this.container.appendChild(this.canvas);
-    if (this.cover) this.setCoverStyle(this.canvas);
+    this.cavnasContainer.appendChild(this.canvas);
 
     // Paint our first frame
     this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
@@ -344,17 +308,13 @@ class ScrollyVideo {
     }
 
     // Make sure the canvas is scaled properly, similar to setCoverStyle
+    const { width, height } = this.videoDimensions;
     this.canvas.width = currFrame.width;
     this.canvas.height = currFrame.height;
-    const { width, height } = this.container.getBoundingClientRect();
 
-    if (width / height > currFrame.width / currFrame.height) {
-      this.canvas.style.width = '100%';
-      this.canvas.style.height = 'auto';
-    } else {
-      this.canvas.style.height = '100%';
-      this.canvas.style.width = 'auto';
-    }
+    this.canvas.style.height = `${height}px`;
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.objectFit = this.objectFit;
 
     // Draw the frame to the canvas context
     this.context.drawImage(currFrame, 0, 0, currFrame.width, currFrame.height);
