@@ -123,7 +123,3 @@ This method is the way that scrollytelling videos have traditionally been done, 
 ## Known Issues
 
 - On iOS, ScrollyVideo will not work if battery saver mode is on. Unfortunately, there is no workaround for this due to the way that iOS handles videos and battery saving functions.
-
----
-
-Created by: [Daniel Kao](https://www.diplateevo.com/)
