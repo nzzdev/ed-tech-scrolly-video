@@ -1,6 +1,6 @@
 {
-  "name": "scrolly-video",
-  "version": "0.0.24",
+  "name": "@nzz/et-video-scroller",
+  "version": "0.1.0",
   "description": "A component for scroll-based (or other externally controlled) playback.",
   "main": "dist/scrolly-video.js",
   "types": "dist/ScrollyVideo.d.ts",
@@ -17,7 +17,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dkaoster/scrolly-video.git"
+    "url": "git+https://github.com/nzzdev/ed-tech-scrolly-video.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "scroll",
@@ -27,12 +30,7 @@
     "react",
     "vue"
   ],
-  "author": "Daniel Kao",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/dkaoster/scrolly-video/issues"
-  },
-  "homepage": "https://github.com/dkaoster/scrolly-video#readme",
   "dependencies": {
     "mp4box": "^0.4.9",
     "ua-parser-js": "^1.0.2"
