@@ -201,9 +201,13 @@ class ScrollyVideo {
    *    - easing: (progress: number) => number - A function that defines the easing curve for the transition. It takes the progress ratio (a number between 0 and 1) as an argument and returns the eased value, affecting the playback speed during the transition.
    */
   setVideoPercentage(percentage, options = {}) {
-    if (this.transitioningRaf) {
+    if (this.transitioningRaf && !options.jump) {
       // eslint-disable-next-line no-undef
       window.cancelAnimationFrame(this.transitioningRaf);
+    }
+
+    if (this.debug) {
+      console.info('setVideoPercentage', percentage, options);
     }
 
     this.videoPercentage = percentage;
