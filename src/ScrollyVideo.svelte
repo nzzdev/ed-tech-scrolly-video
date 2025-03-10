@@ -14,7 +14,7 @@
   $: {
     if (scrollyVideoContainer) {
       // separate out the videoPercentage prop
-      const { videoPercentage, ...restProps } = $$props;
+      const { videoPercentage, jump, ...restProps } = $$props;
 
       if (JSON.stringify(restProps) !== lastPropsString) {
         // if scrollyvideo already exists and any parameter is updated, destroy and recreate.
@@ -32,7 +32,7 @@
         videoPercentage >= 0 &&
         videoPercentage <= 1
       ) {
-        scrollyVideo.setVideoPercentage(videoPercentage);
+        scrollyVideo.setVideoPercentage(videoPercentage, {jump});
       }
     }
   }
