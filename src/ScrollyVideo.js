@@ -84,19 +84,21 @@ class ScrollyVideo {
     this.video.load();
 
     // Adds the video to the container
-    const layoutContainer = document.createElement('div');
-    layoutContainer.style.display = 'flex';
-    layoutContainer.style.justifyContent = 'center';
-    layoutContainer.style.width = '100%';
-    layoutContainer.style.height = '100vh';
+    this.layoutContainer = document.createElement('div');
+    this.layoutContainer.classList.add('scrollyvideo-layout-container');
+    this.layoutContainer.style.display = 'flex';
+    this.layoutContainer.style.justifyContent = 'center';
+    this.layoutContainer.style.width = '100%';
+    this.layoutContainer.style.height = '100vh';
 
-    this.container.appendChild(layoutContainer);
+    this.container.appendChild(this.layoutContainer);
 
-    layoutContainer.appendChild(this.video);
+    this.layoutContainer.appendChild(this.video);
     this.cavnasContainer = document.createElement('div');
-    layoutContainer.appendChild(this.cavnasContainer);
+    this.layoutContainer.appendChild(this.cavnasContainer);
 
     // Setting CSS properties for container
+    this.container.classList.add('scrollyvideo-container');
     this.container.style.display = 'block';
     this.container.style.position = 'sticky';
     this.container.style.top = '0';
@@ -175,12 +177,23 @@ class ScrollyVideo {
     }
 
     // Add resize function
-    this.resize = () => {
+    this.resize = (width) => {
       if (this.debug) console.info('ScrollyVideo resizing...');
       // On resize, we need to reset the cover style
       this.setCoverStyle(this.video);
+
+      // Calculate height maintaining aspect ratio
+      // const aspectRatio = this.video.videoHeight / this.video.videoWidth;
+      // const height = width * aspectRatio;
+
+      // this.videoDimensions = { width, height };
       // Then repaint the canvas, if we are in useWebcodecs
-      this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
+      if (this.canvas) {
+        this.paintCanvasFrame(
+          Math.floor(this.currentTime * this.frameRate),
+          width,
+        );
+      }
     };
 
     // eslint-disable-next-line no-undef
@@ -278,11 +291,16 @@ class ScrollyVideo {
     // Remove the video and add the canvas
     // eslint-disable-next-line no-undef
     this.canvas = document.createElement('canvas');
-    this.context = this.canvas.getContext('2d');
+
+    this.context = this.canvas.getContext('2d', { alpha: false });
 
     // Hide the video and add the canvas to the container
     this.video.style.display = 'none';
     this.cavnasContainer.appendChild(this.canvas);
+
+    // Initialize frame cache
+    this.lastDrawnFrame = null;
+    this.lastDrawnFrameNum = -1;
 
     // Paint our first frame
     this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
@@ -295,7 +313,12 @@ class ScrollyVideo {
    *
    * @param frameNum
    */
-  paintCanvasFrame(frameNum) {
+  paintCanvasFrame(frameNum, pwidth) {
+    // Skip if same frame is being drawn
+    if (frameNum === this.lastDrawnFrameNum) {
+      return;
+    }
+
     // Get the frame and paint it to the canvas
     const currFrame = this.frames[frameNum];
 
@@ -309,15 +332,28 @@ class ScrollyVideo {
 
     // Make sure the canvas is scaled properly, similar to setCoverStyle
     const { width, height } = this.videoDimensions;
+
     this.canvas.width = currFrame.width;
     this.canvas.height = currFrame.height;
 
-    this.canvas.style.height = `${height}px`;
-    this.canvas.style.width = `${width}px`;
+    if (this.objectFit === 'cover') {
+      // Set canvas display size
+      this.canvas.style.width = `${pwidth}px`;
+      this.canvas.style.height = `${height}px`;
+      this.layoutContainer.style.alignItems = 'unset';
+    } else {
+      this.canvas.style.width = `100%`;
+      this.layoutContainer.style.alignItems = 'center';
+    }
     this.canvas.style.objectFit = this.objectFit;
+
+    // Clear previous frame
 
     // Draw the frame to the canvas context
     this.context.drawImage(currFrame, 0, 0, currFrame.width, currFrame.height);
+
+    // Update frame cache
+    this.lastDrawnFrameNum = frameNum;
   }
 
   /**
@@ -533,6 +569,12 @@ class ScrollyVideo {
 
     // eslint-disable-next-line no-undef
     window.removeEventListener('resize', this.resize);
+
+    // Clear frames from memory
+    if (this.frames) {
+      this.frames.forEach((frame) => frame.close());
+      this.frames = [];
+    }
 
     // Clear component
     if (this.container) this.container.innerHTML = '';
