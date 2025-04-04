@@ -22,7 +22,7 @@ class ScrollyVideo {
     trackScroll = true, // Whether this object should automatically respond to scroll
     lockScroll = true, // Whether it ignores human scroll while it runs `setVideoPercentage` with enabled `trackScroll`
     transitionSpeed = 8, // How fast the video transitions between points
-    frameThreshold = 0.01, // When to stop the video animation, in seconds
+    frameThreshold = 0.001, // When to stop the video animation, in seconds
     useWebCodecs = true, // Whether to try using the webcodecs approach
     onReady = () => {}, // A callback that invokes on video decode
     onChange = () => {}, // A callback that invokes on video percentage change
@@ -381,13 +381,13 @@ class ScrollyVideo {
     easing = (x) => x,
   }) {
     if (this.debug) {
-			console.table({
-				transitionSpeed,
-				easing,
-				jump,
-				currentTime: this.currentTime,
-				targetTime: this.targetTime
-			})
+      console.table({
+        transitionSpeed,
+        easing,
+        jump,
+        currentTime: this.currentTime,
+        targetTime: this.targetTime,
+      });
     }
 
     const diff = this.targetTime - this.currentTime;
@@ -486,7 +486,9 @@ class ScrollyVideo {
         // The default easing function is linear.
 
         /** Progress of the animation, in milliseconds */
-        const progress = (timestamp - startTimestamp) / transitionSpeed;
+        const getProgressAtTimestamp = (ts) =>
+          (ts - startTimestamp) / transitionSpeed;
+        const progress = getProgressAtTimestamp(timestamp);
 
         const easedProgress =
           easing && Number.isFinite(progress) ? easing(progress) : progress;
@@ -503,9 +505,25 @@ class ScrollyVideo {
         } else {
           // Otherwise, we play the video and adjust the playbackRate to get a smoother
           // animation effect.
-	        // TODO Correctly determine playback rate
-	        // NOTE We don't have the correct framerate when we are in video mode
-          const desiredPlaybackRate = easedProgress / progress;
+
+          /**
+           * The base speed for the linear case: how fast we have to play
+           * the video so that we can fit the duration within the desired
+           * transition speed.
+           */
+          const basePlaybackRate = duration / transitionSpeed;
+
+          // Calculate the velocity for the next frame.
+          // This way we know whether we have to go faster or slower in relation to the base speed.
+          const progressDistance =
+            getProgressAtTimestamp(timestamp + deltaTime) -
+            getProgressAtTimestamp(timestamp);
+          const easedProgressDistance =
+            easing(getProgressAtTimestamp(timestamp + deltaTime)) -
+            easing(getProgressAtTimestamp(timestamp));
+          const easingFactor = easedProgressDistance / progressDistance;
+
+          const desiredPlaybackRate = basePlaybackRate * easingFactor;
 
           if (this.debug)
             console.info('ScrollyVideo playbackRate:', desiredPlaybackRate);
