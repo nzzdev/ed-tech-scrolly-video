@@ -22,7 +22,7 @@ class ScrollyVideo {
     trackScroll = true, // Whether this object should automatically respond to scroll
     lockScroll = true, // Whether it ignores human scroll while it runs `setVideoPercentage` with enabled `trackScroll`
     transitionSpeed = 8, // How fast the video transitions between points
-    frameThreshold = 0.001, // When to stop the video animation, in seconds
+    frameThreshold = 0.05, // When to stop the video animation, in seconds
     useWebCodecs = true, // Whether to try using the webcodecs approach
     onReady = () => {}, // A callback that invokes on video decode
     onChange = () => {}, // A callback that invokes on video percentage change
@@ -547,7 +547,8 @@ class ScrollyVideo {
             easing(getProgressAtTimestamp(timestamp));
           const easingFactor = easedProgressDistance / progressDistance;
 
-          const desiredPlaybackRate = basePlaybackRate * easingFactor;
+					// clamp between 0.0625 - 16.0
+          const desiredPlaybackRate = Math.min(Math.max(0.0625, basePlaybackRate * easingFactor), 16);
 
           if (this.debug)
             console.info('ScrollyVideo playbackRate:', desiredPlaybackRate);
