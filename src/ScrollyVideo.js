@@ -209,15 +209,15 @@ class ScrollyVideo {
    *
    * Public entry point to directly manipulate the video position.
    *
-   * @param percentage - The percentage of the video duration to set as the current time.
-   * @param options - Configuration options for adjusting the video playback.
-   *    - jump: boolean - If true, the video currentTime will jump directly to the specified
-   *   percentage. If false, the change will be animated over time.
-   *    - transitionSpeed: number - Defines the speed of the transition when `jump` is false.
-   *   Represents the duration of the transition in milliseconds. Default is 8.
-   *    - easing: (progress: number) => number - A function that defines the easing curve for the
-   *   transition. It takes the progress ratio (a number between 0 and 1) as an argument and
-   *   returns the eased value, affecting the playback speed during the transition.
+   * @param {number} percentage  - The percentage of the video duration to set as the current time.
+   * @param {object} [options={}] - Configuration options for adjusting the video playback.
+   * @param {boolean} options.jump - If true, the video currentTime will jump directly to the
+   *   specified percentage. If false, the change will be animated over time.
+   * @param {number} options.transitionSpeed - Defines the speed of the transition when `jump` is
+   *   false. Represents the duration of the transition in milliseconds. Default is 8.
+   * @param {(progress: number) => number} options.easing - A function that defines the easing
+   *   curve for the transition. It takes the progress ratio (a number between 0 and 1) as an
+   *   argument and returns the eased value, affecting the playback speed during the transition.
    */
   setVideoPercentage(percentage, options = {}) {
     if (this.transitioningRaf) {
@@ -239,7 +239,7 @@ class ScrollyVideo {
   /**
    * Sets the style of the video or canvas to "cover" it's container
    *
-   * @param el
+   * @param {HTMLVideoElement | HTMLCanvasElement} el
    */
   setCoverStyle(el) {
     el.style.width = '100%';
@@ -368,12 +368,12 @@ class ScrollyVideo {
    * @param {Object} options - Configuration options for adjusting the video playback.
    * @param {boolean} options.jump - If true, the video currentTime will jump
    *   directly to the specified percentage. If false, the change will be animated over time.
-   * @param {number} options.transitionSpeed - Defines the speed of the transition when `jump` is false.
-   *   Represents the duration of the transition in milliseconds. Default is 8. Use 0 to use the
-   *   native speed of the video.
-   * @param {(progress: number) => number} options.easing - A function that defines the easing curve for the
-   *   transition. It takes the progress ratio (a number between 0 and 1) as an argument and
-   *   returns the eased value, affecting the playback speed during the transition.
+   * @param {number} options.transitionSpeed - Defines the speed of the transition when `jump` is
+   *   false. Represents the duration of the transition in milliseconds. Default is 8. Use 0 to use
+   *   the native speed of the video.
+   * @param {(progress: number) => number} options.easing - A function that defines the easing
+   *   curve for the transition. It takes the progress ratio (a number between 0 and 1) as an
+   *   argument and returns the eased value, affecting the playback speed during the transition.
    */
   transitionToTargetTime({
     jump,
