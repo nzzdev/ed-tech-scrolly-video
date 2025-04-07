@@ -27,6 +27,7 @@ class ScrollyVideo {
     onReady = () => {}, // A callback that invokes on video decode
     onChange = () => {}, // A callback that invokes on video percentage change
     debug = false, // Whether to print debug stats to the console
+    easing = (x) => x, // The easing function
   }) {
     // Make sure that we have a DOM
     if (typeof document !== 'object') {
@@ -69,6 +70,7 @@ class ScrollyVideo {
     this.onReady = onReady;
     this.onChange = onChange;
     this.debug = debug;
+    this.easing = easing;
 
     // Create the initial video object. Even if we are going to use webcodecs,
     // we start with a paused video object
@@ -202,6 +204,28 @@ class ScrollyVideo {
 
     // Calls decode video to attempt webcodecs method
     this.decodeVideo();
+  }
+
+  /**
+   * The easing function to use when playing the video
+   * @type {(x: number) => number}
+   */
+  #easing = (x) => x;
+
+	/**
+	 *
+	 * @param value {(x: number) => number}
+	 */
+  set easing(value) {
+    this.#easing = value;
+  }
+
+	/**
+	 *
+	 * @returns {function(number): number}
+	 */
+  get easing() {
+    return this.#easing;
   }
 
   /**
@@ -378,7 +402,7 @@ class ScrollyVideo {
   transitionToTargetTime({
     jump,
     transitionSpeed = this.transitionSpeed,
-    easing = (x) => x,
+    easing = this.easing,
   }) {
     if (this.debug) {
       console.table({
