@@ -12,22 +12,52 @@ import { debounce, isScrollPositionAtTarget } from './utils';
  *
  * Responsive scrollable videos without obscure video encoding requirements.
  * Compatible with React, Svelte, Vue, and plain HTML.
+ * @class
  */
 class ScrollyVideo {
+  /**
+   * @constructor
+   *
+   * @param {Object} opts
+   * @param {string} opts.src  - The src of the video, required
+   * @param {string | HTMLElement} opts.scrollyVideoContainer - The dom element or id that this
+   *   object will be created in, required
+   * @param {'contain' | 'cover'} [opts.objectFit='contain'] - Whether the video should "cover"
+   *   inside the container
+   * @param {boolean} [opts.sticky=true] - Whether the video should "stick" to the top of the
+   *   container
+   * @param {boolean} [opts.trackScroll=true] - Whether this object should automatically respond to
+   *   scroll. If true, will ignore `transitionSpeed` and `easing` properties.
+   * @param {boolean} [opts.lockScroll=true] - Whether it ignores human scroll while it runs
+   *   `setVideoPercentage` with enabled `trackScroll`
+   * @param {number} [opts.transitionSpeed=16] - For cases when `trackScroll` is disabled, how fast
+   *    the video should transition to the next point, in milliseconds.
+   *    When set to 0, use the inherent video framerate and transition to the next point using
+   *    the video's own speed. These transitions are not bound to happen within a fixed timeframe.
+   * @param {number} [opts.frameThreshold=0.05] - When to stop the video animation, in seconds
+   * @param {boolean} [opts.useWebCodecs=true] - Decode the video and paint the frames to a canvas
+   *   element. Helps getting a smoother animation (especially when going backwards), but requires
+   *   more performance.
+   * @param {() => void} [opts.onReady] - A callback that invokes on video decode
+   * @param {(number) => void} [opts.onChange] - A callback that invokes on video percentage change
+   * @param {boolean} [opts.debug=false] - Whether to print debug stats to the console
+   * @param {(number) => number} [opts.easing=(x)=>x] - When using `transitionSpeed`, which easing
+   *   function to use to smooth out the animation
+   */
   constructor({
-    src, // The src of the video, required
-    scrollyVideoContainer, // The dom element or id that this object will be created in, required
-    objectFit = 'contain', // Whether the video should "cover" inside the container
-    sticky = true, // Whether the video should "stick" to the top of the container
-    trackScroll = true, // Whether this object should automatically respond to scroll
-    lockScroll = true, // Whether it ignores human scroll while it runs `setVideoPercentage` with enabled `trackScroll`
-    transitionSpeed = 8, // How fast the video transitions between points
-    frameThreshold = 0.05, // When to stop the video animation, in seconds
-    useWebCodecs = true, // Whether to try using the webcodecs approach
-    onReady = () => {}, // A callback that invokes on video decode
-    onChange = () => {}, // A callback that invokes on video percentage change
-    debug = false, // Whether to print debug stats to the console
-    easing = (x) => x, // The easing function
+    src,
+    scrollyVideoContainer,
+    objectFit = 'contain',
+    sticky = true,
+    trackScroll = true,
+    lockScroll = true,
+    transitionSpeed = 16,
+    frameThreshold = 0.05,
+    useWebCodecs = true,
+    onReady = () => {},
+    onChange = () => {},
+    debug = false,
+    easing = (x) => x,
   }) {
     // Make sure that we have a DOM
     if (typeof document !== 'object') {
@@ -212,18 +242,16 @@ class ScrollyVideo {
    */
   #easing = (x) => x;
 
-	/**
-	 *
-	 * @param value {(x: number) => number}
-	 */
+  /**
+   * @param value {(x: number) => number}
+   */
   set easing(value) {
     this.#easing = value;
   }
 
-	/**
-	 *
-	 * @returns {function(number): number}
-	 */
+  /**
+   * @returns {function(number): number}
+   */
   get easing() {
     return this.#easing;
   }
@@ -238,7 +266,7 @@ class ScrollyVideo {
    * @param {boolean} options.jump - If true, the video currentTime will jump directly to the
    *   specified percentage. If false, the change will be animated over time.
    * @param {number} options.transitionSpeed - Defines the speed of the transition when `jump` is
-   *   false. Represents the duration of the transition in milliseconds. Default is 8.
+   *   false. Represents the duration of the transition in milliseconds. Default is 16.
    * @param {(progress: number) => number} options.easing - A function that defines the easing
    *   curve for the transition. It takes the progress ratio (a number between 0 and 1) as an
    *   argument and returns the eased value, affecting the playback speed during the transition.
@@ -420,15 +448,22 @@ class ScrollyVideo {
     const isForwardTransition = diff > 0;
     const directionFactor = isForwardTransition ? 1 : -1;
 
-    // Save the animation frame timestamp to calculate the deltaTime (and with that the browser's framerate)
+    /**
+     * Save the animation frame timestamp to calculate the deltaTime (and with that the browser's
+     * framerate). In Milliseconds.
+     * @type {number}
+     */
     let previousAnimationFrameTimestamp;
 
     /**
-     * This is what happens in each frame.
+     * Here is the main loop of the transition animation
      *
-     * @param startCurrentTime
-     * @param startTimestamp
-     * @param timestamp
+     * @param {Object} opts
+     * @param {number} opts.startCurrentTime - Where the video is at when the transition starts; in
+     *   seconds.
+     * @param {number} opts.startTimestamp - The timestamp of the first animation frame that was
+     *   requested, helps to keep track how long the animation is running; in milliseconds.
+     * @param {number} opts.timestamp - The timestamp of the current animation frame, in milliseconds
      */
     const tick = ({ startCurrentTime, startTimestamp, timestamp }) => {
       // if frameThreshold is too low to catch condition Math.abs(this.targetTime - this.currentTime) < this.frameThreshold
@@ -463,10 +498,13 @@ class ScrollyVideo {
 
       /**
        * How long the last frame took to render.
-       * The assumption is that the next will take about the same
+       * The assumption is that the next will take about the same amount of time.
+       * Modern browsers will attempt to keep a framerate of 60 fps;
+       * this means this number should be ~16.6666.
+       *
+       * @type {number}
        */
       const deltaTime = timestamp - previousAnimationFrameTimestamp;
-      const browserFramerate = 1000 / deltaTime;
 
       // Before we do all the calculations, handle the simple case first: jumping to a timestamp
       if (jump) {
@@ -487,7 +525,7 @@ class ScrollyVideo {
         // using the native speed assures that the original easings are respected.
 
         // Add the deltaTime to the currentTime
-        this.currentTime += (deltaTime / 1000) * directionFactor;
+        this.currentTime += deltaTime * 0.001 * directionFactor;
         if (this.canvas) {
           this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
         } else if (isForwardTransition) {
@@ -509,16 +547,26 @@ class ScrollyVideo {
         // You may use an easing function for this.
         // The default easing function is linear.
 
-        /** Progress of the animation, in milliseconds */
+        /**
+         * Calculate how far along the transition we should be.
+         * Depends on the {@link startTimestamp} and {@link transitionSpeed}.
+         *
+         * @param {number} ts - The timestamp of the current animation frame, in milliseconds
+         * @returns {number} - The current progress, as a number between 0 and 1.
+         */
         const getProgressAtTimestamp = (ts) =>
           (ts - startTimestamp) / transitionSpeed;
+
+        /** How far along the transition we are timewise */
         const progress = getProgressAtTimestamp(timestamp);
 
+        /** How far the transition should be, taking easing into account */
         const easedProgress =
           easing && Number.isFinite(progress) ? easing(progress) : progress;
 
-				// Calculate desired currentTime; multiply with 0.001 since this one is in seconds
-        this.currentTime = startCurrentTime + easedProgress * duration * directionFactor * 0.001;
+        // Calculate desired currentTime; multiply with 0.001 since this one is in seconds
+        this.currentTime =
+          startCurrentTime + easedProgress * duration * directionFactor * 0.001;
 
         if (this.canvas) {
           this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
@@ -549,8 +597,11 @@ class ScrollyVideo {
             easing(getProgressAtTimestamp(timestamp));
           const easingFactor = easedProgressDistance / progressDistance;
 
-					// clamp between 0.0625 - 16.0
-          const desiredPlaybackRate = Math.min(Math.max(0.0625, basePlaybackRate * easingFactor), 16);
+          // clamp between 0.0625 - 16.0
+          const desiredPlaybackRate = Math.min(
+            Math.max(0.0625, basePlaybackRate * easingFactor),
+            16,
+          );
 
           if (this.debug)
             console.info('ScrollyVideo playbackRate:', desiredPlaybackRate);
