@@ -516,7 +516,9 @@ class ScrollyVideo {
 
         const easedProgress =
           easing && Number.isFinite(progress) ? easing(progress) : progress;
-        this.currentTime += easedProgress * directionFactor;
+
+				// Calculate desired currentTime; multiply with 0.001 since this one is in seconds
+        this.currentTime = startCurrentTime + easedProgress * duration * directionFactor * 0.001;
 
         if (this.canvas) {
           this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
