@@ -206,36 +206,263 @@ const decodeVideo = (
  */
 export default (src, emitFrame, debug) => {};
 
+/** @type ImageBitmap[] */
+let frames = [];
+/** @type OffscreenCanvas */
+let canvas;
+/** @type ImageBitmapRenderingContext */
+let context;
+/** @type number */
+let duration;
+/** @type number */
+let frameRate;
+let lastFrame = -1;
+let currentTime = 0;
+let targetTime = 0;
+let transitioningRaf = null;
+const frameThreshold = 0.05;
+
 // eslint-disable-next-line no-restricted-globals
-self.onmessage = (msg) => {
-  const { src, debug } = msg.data;
+self.onmessage = (event) => {
+  function processVideoSrc(src, debug) {
+    // If our browser supports WebCodecs natively
+    if (
+      typeof VideoDecoder === 'function' &&
+      typeof EncodedVideoChunk === 'function'
+    ) {
+      if (debug)
+        console.info(
+          'WebCodecs is natively supported, using native version...',
+        );
 
-  // If our browser supports WebCodecs natively
-  if (
-    typeof VideoDecoder === 'function' &&
-    typeof EncodedVideoChunk === 'function'
-  ) {
-    if (debug)
-      console.info('WebCodecs is natively supported, using native version...');
+      return decodeVideo(
+        src,
+        (frame) => {
+          frames.push(frame);
+        },
+        {
+          VideoDecoder,
+          EncodedVideoChunk,
+          debug,
+        },
+      )
+        .then(() => {
+          // If no frames, something went wrong
+          if (frames.length === 0) {
+            throw new Error('No frames were received from webCodecs');
+          }
+          if (debug) console.info('Decoding successfully.');
+          self.postMessage({ message: 'DECODING_SUCCESS' });
+        })
+        .catch((err) => {
+          frames = [];
+          if (debug) console.error('Decoding was not successful.', err);
+        });
+    }
 
-    const frames = [];
-
-    decodeVideo(
-      src,
-      (frame) => {
-        frames.push(frame);
-      },
-      {
-        VideoDecoder,
-        EncodedVideoChunk,
-        debug,
-      },
-    ).then(() => {
-      if (debug) console.info('Decoding successfully.');
-      self.postMessage('Decoding Successful');
-    });
+    // Otherwise, resolve nothing
+    if (debug) console.info('WebCodecs is not available in this browser.');
   }
 
-  // Otherwise, resolve nothing
-  if (debug) console.info('WebCodecs is not available in this browser.');
+  function paintCanvasFrame(frameNum, debug) {
+    // Skip if same frame is being drawn
+    if (frameNum === lastFrame) {
+      return;
+    }
+
+    // Get the frame and paint it to the canvas
+    const currFrame = frames[frameNum];
+
+    if (!canvas || !currFrame || !context) {
+      debugger;
+      console.log('We are missing some stuff');
+      console.log(canvas, currFrame, context);
+      return;
+    }
+
+    // save the current frame back
+    if (lastFrame >= 0) frames[lastFrame] = canvas.transferToImageBitmap();
+
+    if (debug) {
+      console.info('Painting frame', frameNum);
+    }
+
+    console.table(currFrame);
+
+    canvas.height = currFrame.height;
+    canvas.width = currFrame.width;
+
+    // Draw the frame to the canvas context
+    context.transferFromImageBitmap(currFrame);
+
+    // Update frame cache
+    lastFrame = frameNum;
+  }
+
+  function transitionToTargetTime(options, debug = false) {
+    const { transitionSpeed, jump, easing = (x) => x } = options;
+
+    const diff = targetTime - currentTime;
+    const distance = Math.abs(diff);
+    const distanceInMs = distance * 1000; // convert to milliseconds
+    const isForwardTransition = diff > 0;
+    const directionFactor = isForwardTransition ? 1 : -1;
+
+    /**
+     * Save the animation frame timestamp to calculate the deltaTime (and with that the browser's
+     * framerate). In Milliseconds.
+     * @type {number}
+     */
+    let previousAnimationFrameTimestamp;
+
+    /**
+     * Here is the main loop of the transition animation
+     *
+     * @param {Object} opts
+     * @param {number} opts.startCurrentTime - Where the video is at when the transition starts; in
+     *   seconds.
+     * @param {number} opts.startTimestamp - The timestamp of the first animation frame that was
+     *   requested, helps to keep track how long the animation is running; in milliseconds.
+     * @param {number} opts.timestamp - The timestamp of the current animation frame, in milliseconds
+     */
+    const tick = ({ startCurrentTime, startTimestamp, timestamp }) => {
+      // if frameThreshold is too low to catch condition Math.abs(targetTime - currentTime) < this.frameThreshold
+      const hasPassedThreshold = isForwardTransition
+        ? currentTime >= targetTime
+        : currentTime <= targetTime;
+
+      // If we are already close enough to our target, pause the video and return.
+      // This is the base case of the recursive function
+      if (
+        // eslint-disable-next-line no-restricted-globals
+        isNaN(targetTime) ||
+        // If the currentTime is already close enough to the targetTime
+        Math.abs(targetTime - currentTime) < frameThreshold ||
+        hasPassedThreshold
+      ) {
+        if (transitioningRaf) {
+          // eslint-disable-next-line no-undef
+          cancelAnimationFrame(transitioningRaf);
+          transitioningRaf = null;
+        }
+        self.postMessage({ message: 'CURRENT_TIME', currentTime });
+
+        return;
+      }
+
+      // Make sure we don't go out of time bounds
+      if (targetTime > duration) targetTime = duration;
+      if (targetTime < 0) targetTime = 0;
+
+      /**
+       * How long the last frame took to render.
+       * The assumption is that the next will take about the same amount of time.
+       * Modern browsers will attempt to keep a framerate of 60 fps;
+       * this means this number should be ~16.6666.
+       *
+       * @type {number}
+       */
+      const deltaTime = timestamp - previousAnimationFrameTimestamp;
+
+      // Before we do all the calculations, handle the simple case first: jumping to a timestamp
+      if (jump) {
+        // When jumping, we go directly to the frame
+        currentTime = targetTime;
+        paintCanvasFrame(Math.floor(currentTime * frameRate));
+      } else if (transitionSpeed === 0) {
+        // Use the native timing of the video
+        // Works best with animated videos;
+        // using the native speed assures that the original easings are respected.
+
+        // Add the deltaTime to the currentTime
+        currentTime += deltaTime * 0.001 * directionFactor;
+        paintCanvasFrame(Math.floor(currentTime * frameRate));
+      } else {
+        // Use a fixed amount of time for the transition to the desired frame
+        // You may use an easing function for this.
+        // The default easing function is linear.
+
+        /**
+         * Calculate how far along the transition we should be.
+         * Depends on the {@link startTimestamp} and {@link transitionSpeed}.
+         *
+         * @param {number} ts - The timestamp of the current animation frame, in milliseconds
+         * @returns {number} - The current progress, as a number between 0 and 1.
+         */
+        const getProgressAtTimestamp = (ts) =>
+          (ts - startTimestamp) / transitionSpeed;
+
+        /** How far along the transition we are timewise */
+        const progress = getProgressAtTimestamp(timestamp);
+
+        /** How far the transition should be, taking easing into account */
+        const easedProgress =
+          easing && Number.isFinite(progress) ? easing(progress) : progress;
+
+        // Calculate desired currentTime; multiply with 0.001 since this one is in seconds
+        currentTime =
+          startCurrentTime +
+          easedProgress * distanceInMs * directionFactor * 0.001;
+        paintCanvasFrame(Math.floor(currentTime * frameRate));
+      }
+
+      // Recursively calls ourselves until the animation is done.
+      previousAnimationFrameTimestamp = timestamp;
+      if (typeof requestAnimationFrame === 'function') {
+        // eslint-disable-next-line no-undef
+        transitioningRaf = requestAnimationFrame((currentTimestamp) =>
+          tick({
+            startCurrentTime,
+            startTimestamp,
+            timestamp: currentTimestamp,
+          }),
+        );
+      }
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      // eslint-disable-next-line no-undef
+      transitioningRaf = requestAnimationFrame((startTimestamp) => {
+        previousAnimationFrameTimestamp = startTimestamp;
+        tick({
+          startCurrentTime: currentTime,
+          startTimestamp,
+          timestamp: startTimestamp,
+        });
+      });
+    }
+  }
+
+  const { message, debug } = event.data;
+  if (debug) console.info('Received Message: ', message);
+
+  switch (message) {
+    case 'REQUEST_DECODE':
+      const { src } = event.data;
+      processVideoSrc(src, frames, debug);
+      break;
+
+    case 'SETUP_CANVAS':
+      try {
+        const { canvas: passedCanvas, duration: passedDuration } = event.data;
+        canvas = passedCanvas;
+        context = canvas.getContext('bitmaprenderer');
+        duration = passedDuration;
+        frameRate = frames.length / duration;
+      } catch (e) {
+        if (debug) console.error('Setting up canvas failed.', e);
+      }
+      self.postMessage({ message: 'CANVAS_CREATED' });
+      break;
+
+    case 'REQUEST_TRANSITION':
+      cancelAnimationFrame(transitioningRaf);
+      const { targetTime: passedTargetTime, options } = event.data;
+      targetTime = passedTargetTime;
+      transitionToTargetTime(options, debug);
+      break;
+
+    default:
+      if (debug) console.info('Message could not be processed.', message);
+  }
 };
