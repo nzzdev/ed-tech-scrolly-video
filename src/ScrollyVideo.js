@@ -1,5 +1,5 @@
 import UAParser from 'ua-parser-js';
-import videoDecoder from './videoDecoder';
+import VideoDecoderWorker from 'web-worker:./videoDecoder';
 import { debounce, isScrollPositionAtTarget } from './utils';
 
 /**
@@ -233,6 +233,7 @@ class ScrollyVideo {
     this.video.addEventListener('progress', this.resize);
 
     // Calls decode video to attempt webcodecs method
+    this.decodeWorker = new VideoDecoderWorker();
     this.decodeVideo();
   }
 
@@ -317,13 +318,11 @@ class ScrollyVideo {
     }
 
     try {
-      await videoDecoder(
-        this.src,
-        (frame) => {
-          this.frames.push(frame);
-        },
-        this.debug,
-      );
+      this.decodeWorker.postMessage({ src: this.src, debug: this.debug });
+      this.decodeWorker.onmessage = (event) => {
+        console.log(`Received message from worker: ${event}`);
+				this.frames = event.data.frames;
+      };
     } catch (error) {
       if (this.debug)
         console.error('Error encountered while decoding video', error);

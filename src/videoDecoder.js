@@ -204,7 +204,12 @@ const decodeVideo = (
  * @param debug
  * @returns {Promise<never>|Promise<void>|*}
  */
-export default (src, emitFrame, debug) => {
+export default (src, emitFrame, debug) => {};
+
+// eslint-disable-next-line no-restricted-globals
+self.onmessage = (msg) => {
+  const { src, debug } = msg.data;
+
   // If our browser supports WebCodecs natively
   if (
     typeof VideoDecoder === 'function' &&
@@ -212,14 +217,25 @@ export default (src, emitFrame, debug) => {
   ) {
     if (debug)
       console.info('WebCodecs is natively supported, using native version...');
-    return decodeVideo(src, emitFrame, {
-      VideoDecoder,
-      EncodedVideoChunk,
-      debug,
+
+    const frames = [];
+
+    decodeVideo(
+      src,
+      (frame) => {
+        frames.push(frame);
+      },
+      {
+        VideoDecoder,
+        EncodedVideoChunk,
+        debug,
+      },
+    ).then(() => {
+      if (debug) console.info('Decoding successfully.');
+      self.postMessage('Decoding Successful');
     });
   }
 
   // Otherwise, resolve nothing
   if (debug) console.info('WebCodecs is not available in this browser.');
-  return Promise.resolve();
 };
