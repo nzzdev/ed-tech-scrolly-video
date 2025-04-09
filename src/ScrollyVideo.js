@@ -114,23 +114,17 @@ class ScrollyVideo {
     this.video.muted = true;
     this.video.pause();
     this.video.load();
+    this.setElementExpansion(this.video);
 
     // Adds the video to the container
     this.layoutContainer = document.createElement('div');
     this.layoutContainer.classList.add('scrollyvideo-layout-container');
-    this.layoutContainer.style.display = 'flex';
-    this.layoutContainer.style.justifyContent = 'center';
-    this.layoutContainer.style.alignContent = 'center';
-    this.layoutContainer.style.justifyItems = 'stretch';
-    this.layoutContainer.style.alignItems = 'stretch';
+    this.layoutContainer.style.position = 'relative';
     this.layoutContainer.style.width = '100%';
     this.layoutContainer.style.height = '100vh';
 
     this.container.appendChild(this.layoutContainer);
-
     this.layoutContainer.appendChild(this.video);
-    this.cavnasContainer = document.createElement('div');
-    this.layoutContainer.appendChild(this.cavnasContainer);
 
     // Setting CSS properties for container
     this.container.classList.add('scrollyvideo-container');
@@ -220,7 +214,7 @@ class ScrollyVideo {
       // this.videoDimensions = { width, height };
       // Then repaint the canvas, if we are in useWebcodecs
       if (this.useCanvas) {
-        this.setCoverStyle(this.cavnasContainer.querySelector('canvas'));
+        this.setCoverStyle(this.canvas);
       }
     };
 
@@ -229,8 +223,12 @@ class ScrollyVideo {
     this.video.addEventListener('progress', this.resize);
 
     // Calls decode video to attempt webcodecs method
-    this.decodeWorker = new VideoDecoderWorker();
-    this.decodeVideo();
+    if (window.Worker) {
+      this.decodeWorker = new VideoDecoderWorker();
+      this.decodeVideo();
+    } else {
+      this.useCanvas = false;
+    }
   }
 
   /**
@@ -260,17 +258,31 @@ class ScrollyVideo {
 
     // adapt the visibility of the elements
     if (value) {
+      // Draw current frame
+      this.decodeWorker.postMessage({
+        message: 'PAINT_CURRENT_TIME',
+        currentTime: this.currentTime,
+      });
+      // cancel current animation
+      window.cancelAnimationFrame(this.transitioningRaf);
+
+      this.canvas.style.display = 'block';
       // Hide the video
       this.video.style.display = 'none';
-      const canvas = this.cavnasContainer.querySelector('canvas');
-      this.setCoverStyle(canvas);
     } else {
+      // synchronise the current time with the worker
+      this.decodeWorker.postMessage({ message: 'GET_CURRENT_TIME' });
+
       // Show the video
       this.video.style.display = 'block';
+      this.layoutContainer.style.display = 'none';
     }
-
     // Update video to the latest requested frame
-    this.transitionToTargetTime({ jump: true });
+    // restart transition
+    this.transitionToTargetTime({
+      transitionSpeed: this.transitionSpeed,
+      easing: this.easing,
+    });
   }
 
   get useCanvas() {
@@ -320,6 +332,14 @@ class ScrollyVideo {
     el.style.objectFit = this.objectFit;
   }
 
+  setElementExpansion(el) {
+    el.style.position = 'absolute';
+    el.style.top = '0';
+    el.style.left = '0';
+    el.style.bottom = '0';
+    el.style.right = '0';
+  }
+
   /**
    * Uses webCodecs to decode the video into frames
    */
@@ -344,20 +364,23 @@ class ScrollyVideo {
       });
       this.decodeWorker.onmessage = (event) => {
         const { message } = event.data;
-        console.log(`Received message from worker.`, message);
+        if (this.debug) console.log(`Received message from worker.`, message);
 
         switch (message) {
           case 'DECODING_SUCCESS':
             // The video has been decoded, so we can set up the canvas
-            const canvas = document.createElement('canvas');
-            const offscreen = canvas.transferControlToOffscreen();
-            this.cavnasContainer.appendChild(canvas);
+            this.canvas = document.createElement('canvas');
+            const offscreen = this.canvas.transferControlToOffscreen();
+            this.layoutContainer.appendChild(this.canvas);
+            this.setElementExpansion(this.canvas);
+            this.setCoverStyle(this.canvas);
             this.decodeWorker.postMessage(
               {
                 canvas: offscreen,
                 debug: this.debug,
                 message: 'SETUP_CANVAS',
                 duration: this.video.duration,
+                currentTime: this.currentTime,
               },
               [offscreen],
             );
@@ -379,12 +402,21 @@ class ScrollyVideo {
     } catch (error) {
       if (this.debug)
         console.error('Error encountered while decoding video', error);
+
+      // move back to video
+      this.useCanvas = false;
     }
+
+    this.decodeWorker.onerror = (event) => {
+      if (this.debug)
+        console.error('Decode Worker encountered an error', event);
+
+      // fall back to video
+      this.useCanvas = false;
+    };
 
     this.onReady();
   }
-
-
 
   /**
    * Transitions the video or the canvas to the proper frame.
@@ -400,7 +432,7 @@ class ScrollyVideo {
    *   argument and returns the eased value, affecting the playback speed during the transition.
    */
   transitionToTargetTime({
-    jump,
+    jump = false,
     transitionSpeed = this.transitionSpeed,
     easing = this.easing,
   }) {
@@ -416,7 +448,7 @@ class ScrollyVideo {
 
     // hand off request to the web worker if we're using canvas
     if (this.useCanvas) {
-       {
+      {
         this.decodeWorker.postMessage({
           message: 'REQUEST_TRANSITION',
           targetTime: this.targetTime,
@@ -435,7 +467,7 @@ class ScrollyVideo {
         return;
       }
 
-/*       catch {
+      /*       catch {
         if (this.debug) console.error('We run into trouble. Falling back to the video.')
         this.useCanvas = false;
       } */
@@ -660,7 +692,7 @@ class ScrollyVideo {
     // Play the video if we are in video mode
     // I don't understand this. This only starts to play if the video is *not* paused,
     // as in: already playing? WTF?
-    if (!this.canvas && !this.video.paused) this.video.play();
+    if (!this.useCanvas && !this.video.paused) this.video.play();
 
     this.transitionToTargetTime(options);
   }
