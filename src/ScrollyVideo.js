@@ -158,6 +158,11 @@ class ScrollyVideo {
 
     // Add scroll listener for responding to scroll position
     this.updateScrollPercentage = (jump) => {
+      // handle cases where we get an event object instead of a boolean as a parameter
+      if (jump && typeof jump === 'object') {
+        jump = true
+      }
+
       // Used for internally setting the scroll percentage based on built-in listeners
       const containerBoundingClientRect =
         this.container.parentNode.getBoundingClientRect();
@@ -185,7 +190,7 @@ class ScrollyVideo {
     // Add our event listeners for handling changes to the window or scroll
     if (this.trackScroll) {
       // eslint-disable-next-line no-undef
-      window.addEventListener('scroll', this.updateScrollPercentage);
+      window.addEventListener('scroll', this.updateScrollPercentage, {passive: true});
 
       // Set the initial scroll percentage
       this.video.addEventListener(
