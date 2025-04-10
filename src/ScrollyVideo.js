@@ -289,7 +289,7 @@ class ScrollyVideo {
 
       // Show the video
       this.video.style.display = 'block';
-      this.layoutContainer.style.display = 'none';
+      this.canvas.style.display = 'none';
     }
     // Update video to the latest requested frame
     // restart transition
