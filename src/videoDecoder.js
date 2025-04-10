@@ -112,7 +112,7 @@ const decodeVideo = (
       // Creates a VideoDecoder instance
       const decoder = new VideoDecoder({
         output: (frame) => {
-          createImageBitmap(frame, { resizeQuality: 'high' }).then((bitmap) => {
+          createImageBitmap(frame).then((bitmap) => {
             emitFrame(bitmap);
             frame.close();
 
@@ -354,7 +354,7 @@ function transitionToTargetTime(options, debug = false) {
     // This is the base case of the recursive function
     if (
       // eslint-disable-next-line no-restricted-globals
-      isNaN(targetTime) ||
+      Number.isNaN(targetTime) ||
       // If the currentTime is already close enough to the targetTime
       Math.abs(targetTime - currentTime) < frameThreshold ||
       hasPassedThreshold
@@ -471,7 +471,7 @@ self.onmessage = (event) => {
         frameRate = frames.length / duration;
         // paint first frame to get at least something
         transitioningRaf = requestAnimationFrame(() => {
-          paintCanvasFrame(0, debug, true);
+          paintCanvasFrame(1, debug, true);
         });
       } catch (e) {
         if (debug) console.error('Setting up canvas failed.', e);
@@ -483,7 +483,7 @@ self.onmessage = (event) => {
       const { currentTime: passedCurrentTime } = event.data;
       currentTime = passedCurrentTime;
       transitioningRaf = requestAnimationFrame(() => {
-        paintCanvasFrame(Math.floor(currentTime * frameRate), debug, true);
+        paintCanvasFrame(Math.floor(currentTime * frameRate), debug);
       });
       break;
 
