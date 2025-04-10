@@ -300,7 +300,7 @@ function paintCanvasFrame(frameNum, debug = false, force = false) {
   if (lastFrame >= 0) frames[lastFrame] = canvas.transferToImageBitmap();
 
   if (debug) {
-    console.info('Painting frame', frameNum);
+    console.debug('Painting frame', frameNum);
   }
 
   canvas.height = currFrame.height;
@@ -315,6 +315,8 @@ function paintCanvasFrame(frameNum, debug = false, force = false) {
 
 function transitionToTargetTime(options, debug = false) {
   const { transitionSpeed, jump, easing = (x) => x } = options;
+
+  if (Number.isNaN(targetTime)) return;
 
   const diff = targetTime - currentTime;
   const distance = Math.abs(diff);
@@ -452,7 +454,7 @@ function transitionToTargetTime(options, debug = false) {
 self.onmessage = (event) => {
   const { message, debug } = event.data;
 
-  if (debug) console.info('Received Message: ', message);
+  if (debug) console.debug('Worker received Message: ', message, event.data);
 
   switch (message) {
     case 'REQUEST_DECODE':
@@ -467,6 +469,10 @@ self.onmessage = (event) => {
         context = canvas.getContext('bitmaprenderer');
         duration = passedDuration;
         frameRate = frames.length / duration;
+        // paint first frame to get at least something
+        transitioningRaf = requestAnimationFrame(() => {
+          paintCanvasFrame(0, debug, true);
+        });
       } catch (e) {
         if (debug) console.error('Setting up canvas failed.', e);
       }
@@ -476,7 +482,9 @@ self.onmessage = (event) => {
     case 'PAINT_CURRENT_TIME':
       const { currentTime: passedCurrentTime } = event.data;
       currentTime = passedCurrentTime;
-      paintCanvasFrame(currentTime, debug, true);
+      transitioningRaf = requestAnimationFrame(() => {
+        paintCanvasFrame(Math.floor(currentTime * frameRate), debug, true);
+      });
       break;
 
     case 'REQUEST_TRANSITION':
@@ -491,6 +499,6 @@ self.onmessage = (event) => {
       break;
 
     default:
-      if (debug) console.info('Message could not be processed.', message);
+      if (debug) console.info('Message was not be processed.', message);
   }
 };

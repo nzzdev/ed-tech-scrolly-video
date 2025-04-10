@@ -160,7 +160,7 @@ class ScrollyVideo {
     this.updateScrollPercentage = (jump) => {
       // handle cases where we get an event object instead of a boolean as a parameter
       if (jump && typeof jump === 'object') {
-        jump = true
+        jump = true;
       }
 
       // Used for internally setting the scroll percentage based on built-in listeners
@@ -174,7 +174,7 @@ class ScrollyVideo {
         (containerBoundingClientRect.height - window.innerHeight);
 
       if (this.debug) {
-        console.info('ScrollyVideo scrolled to', scrollPercent);
+        console.debug('ScrollyVideo scrolled to', scrollPercent);
       }
 
       if (this.targetScrollPosition == null) {
@@ -190,7 +190,9 @@ class ScrollyVideo {
     // Add our event listeners for handling changes to the window or scroll
     if (this.trackScroll) {
       // eslint-disable-next-line no-undef
-      window.addEventListener('scroll', this.updateScrollPercentage, {passive: true});
+      window.addEventListener('scroll', this.updateScrollPercentage, {
+        passive: true,
+      });
 
       // Set the initial scroll percentage
       this.video.addEventListener(
@@ -234,6 +236,7 @@ class ScrollyVideo {
     } else {
       this.useCanvas = false;
     }
+    this.onReady();
   }
 
   /**
@@ -263,10 +266,12 @@ class ScrollyVideo {
 
     // adapt the visibility of the elements
     if (value) {
+      if (this.debug) console.log('Switching to using the canvas.');
       // Draw current frame
       this.decodeWorker.postMessage({
         message: 'PAINT_CURRENT_TIME',
         currentTime: this.currentTime,
+        debug: this.debug,
       });
       // cancel current animation
       window.cancelAnimationFrame(this.transitioningRaf);
@@ -275,8 +280,12 @@ class ScrollyVideo {
       // Hide the video
       this.video.style.display = 'none';
     } else {
+      if (this.debug) console.log('Turning canvas off; falling back to video');
       // synchronise the current time with the worker
-      this.decodeWorker.postMessage({ message: 'GET_CURRENT_TIME' });
+      this.decodeWorker.postMessage({
+        message: 'GET_CURRENT_TIME',
+        debug: this.debug,
+      });
 
       // Show the video
       this.video.style.display = 'block';
@@ -369,7 +378,8 @@ class ScrollyVideo {
       });
       this.decodeWorker.onmessage = (event) => {
         const { message } = event.data;
-        if (this.debug) console.log(`Received message from worker.`, message);
+        if (this.debug)
+          console.debug(`Received message from worker.`, message, event.data);
 
         switch (message) {
           case 'DECODING_SUCCESS':
@@ -397,11 +407,18 @@ class ScrollyVideo {
 
           case 'CURRENT_TIME':
             this.currentTime = event.data.currentTime;
+
+            // getting the current time is the last thing we should get when we disable the use of canvas
+            // in this case the worker should be terminated
+            if (!this.useCanvas) {
+              this.decodeWorker.terminate();
+            }
+
             break;
 
           default:
             if (this.debug)
-              console.info('Message could not be processed.', message);
+              console.info('Message was not be processed.', message);
         }
       };
     } catch (error) {
@@ -448,6 +465,7 @@ class ScrollyVideo {
         jump,
         currentTime: this.currentTime,
         targetTime: this.targetTime,
+        useCanvas: this.useCanvas,
       });
     }
 
@@ -631,7 +649,7 @@ class ScrollyVideo {
           );
 
           if (this.debug)
-            console.info('ScrollyVideo playbackRate:', desiredPlaybackRate);
+            console.debug('ScrollyVideo playbackRate:', desiredPlaybackRate);
           // eslint-disable-next-line no-restricted-globals
           if (!isNaN(desiredPlaybackRate)) {
             this.video.playbackRate = desiredPlaybackRate;
@@ -735,7 +753,7 @@ class ScrollyVideo {
    * Call to destroy this ScrollyVideo object
    */
   destroy() {
-    if (this.debug) console.info('Destroying ScrollyVideo');
+    if (this.debug) console.log('Destroying ScrollyVideo');
 
     this.decodeWorker.terminate();
 
