@@ -268,11 +268,13 @@ function processVideoSrc(src, debug = false) {
         frames = [];
 
         if (debug) console.error('Decoding was not successful.', err);
+				throw err;
       });
   }
 
   // Otherwise, resolve nothing
   if (debug) console.info('WebCodecs is not available in this browser.');
+	throw new Error('WebCodecs is not available in this browser.');
 }
 
 /**
@@ -484,6 +486,13 @@ self.onmessage = (event) => {
       currentTime = passedCurrentTime;
       transitioningRaf = requestAnimationFrame(() => {
         paintCanvasFrame(Math.floor(currentTime * frameRate), debug);
+      });
+      break;
+
+    case 'PAINT_FRAME':
+      const { frame } = event.data;
+      transitioningRaf = requestAnimationFrame(() => {
+        paintCanvasFrame(frame, debug, true);
       });
       break;
 

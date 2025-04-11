@@ -278,7 +278,18 @@ class ScrollyVideo {
 
       this.canvas.style.display = 'block';
       // Hide the video
-      this.video.style.display = 'none';
+      // this.video.style.display = 'none';
+
+			// Allow inspection of individual frames
+      if (this.debug) {
+        window.videoscrollerPaintFrame = (frame) => {
+          this.decodeWorker.postMessage({
+            message: 'PAINT_FRAME',
+            frame,
+	          debug: this.debug,
+          });
+        };
+      }
     } else {
       if (this.debug) console.log('Turning canvas off; falling back to video');
       // synchronise the current time with the worker
@@ -288,7 +299,7 @@ class ScrollyVideo {
       });
 
       // Show the video
-      this.video.style.display = 'block';
+      //this.video.style.display = 'block';
       this.canvas.style.display = 'none';
     }
     // Update video to the latest requested frame
@@ -386,7 +397,7 @@ class ScrollyVideo {
             // The video has been decoded, so we can set up the canvas
             this.canvas = document.createElement('canvas');
             const offscreen = this.canvas.transferControlToOffscreen();
-            this.layoutContainer.appendChild(this.canvas);
+            this.layoutContainer.append(this.canvas);
             this.setElementExpansion(this.canvas);
             this.setCoverStyle(this.canvas);
             this.decodeWorker.postMessage(
@@ -427,6 +438,7 @@ class ScrollyVideo {
 
       // move back to video
       this.useCanvas = false;
+			this.decodeWorker.terminate();
     }
 
     this.decodeWorker.onerror = (event) => {
@@ -435,6 +447,7 @@ class ScrollyVideo {
 
       // fall back to video
       this.useCanvas = false;
+			this.decodeWorker.terminate();
     };
 
     this.onReady();
@@ -755,7 +768,7 @@ class ScrollyVideo {
   destroy() {
     if (this.debug) console.log('Destroying ScrollyVideo');
 
-    this.decodeWorker.terminate();
+		if (this.decodeWorker) this.decodeWorker.terminate();
 
     if (this.trackScroll)
       // eslint-disable-next-line no-undef
