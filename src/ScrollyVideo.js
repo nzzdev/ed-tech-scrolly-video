@@ -315,26 +315,6 @@ class ScrollyVideo {
   }
 
   /**
-   * The easing function to use when playing the video
-   * @type {(x: number) => number}
-   */
-  #easing = (x) => x;
-
-  /**
-   * @param value {(x: number) => number}
-   */
-  set easing(value) {
-    this.#easing = value;
-  }
-
-  /**
-   * @returns {function(number): number}
-   */
-  get easing() {
-    return this.#easing;
-  }
-
-  /**
    * Sets the currentTime of the video as a specified percentage of its total duration.
    *
    * Public entry point to directly manipulate the video position.
