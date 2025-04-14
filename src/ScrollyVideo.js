@@ -450,6 +450,10 @@ class ScrollyVideo {
 			this.decodeWorker.terminate();
     };
 
+    // Try to cover all the bases when a user opens another page
+    window.addEventListener('popstate', () => {this.decodeWorker.terminate();});
+    window.addEventListener('pagehide', () => {this.decodeWorker.terminate();});
+
     this.onReady();
   }
 
