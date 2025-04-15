@@ -1,5 +1,4 @@
 import UAParser from 'ua-parser-js';
-import VideoDecoderWorker from 'web-worker:./videoDecoder';
 import { debounce, isScrollPositionAtTarget } from './utils';
 
 /**
@@ -231,7 +230,7 @@ class ScrollyVideo {
 
     // Calls decode video to attempt webcodecs method
     if (window.Worker) {
-      this.decodeWorker = new VideoDecoderWorker();
+      this.decodeWorker = new Worker(new URL('./videoDecoder.js', import.meta.url), {type: 'module'})
       this.decodeVideo();
     } else {
       this.useCanvas = false;

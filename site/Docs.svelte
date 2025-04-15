@@ -1,5 +1,5 @@
 <script>
-  import SvelteMarkdown from 'svelte-markdown';
+  import SvelteMarkdown from '@humanspeak/svelte-markdown';
   import Link from './markdown-renderers/Link.svelte';
 
   // eslint-disable-next-line no-undef
