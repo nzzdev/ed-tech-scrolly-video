@@ -280,13 +280,13 @@ class ScrollyVideo {
       // Hide the video
       // this.video.style.display = 'none';
 
-			// Allow inspection of individual frames
+      // Allow inspection of individual frames
       if (this.debug) {
         window.videoscrollerPaintFrame = (frame) => {
           this.decodeWorker.postMessage({
             message: 'PAINT_FRAME',
             frame,
-	          debug: this.debug,
+            debug: this.debug,
           });
         };
       }
@@ -438,7 +438,7 @@ class ScrollyVideo {
 
       // move back to video
       this.useCanvas = false;
-			this.decodeWorker.terminate();
+      this.decodeWorker.terminate();
     }
 
     this.decodeWorker.onerror = (event) => {
@@ -447,12 +447,8 @@ class ScrollyVideo {
 
       // fall back to video
       this.useCanvas = false;
-			this.decodeWorker.terminate();
+      this.decodeWorker.terminate();
     };
-
-    // Try to cover all the bases when a user opens another page
-    window.addEventListener('popstate', () => {this.decodeWorker.terminate();});
-    window.addEventListener('pagehide', () => {this.decodeWorker.terminate();});
 
     this.onReady();
   }
@@ -492,6 +488,7 @@ class ScrollyVideo {
         this.decodeWorker.postMessage({
           message: 'REQUEST_TRANSITION',
           targetTime: this.targetTime,
+          currentTime: this.currentTime,
           options: {
             jump,
             transitionSpeed,
@@ -499,10 +496,6 @@ class ScrollyVideo {
           },
           debug: this.debug,
         });
-
-        if (jump) {
-          this.currentTime = this.targetTime;
-        }
 
         return;
       }
@@ -589,6 +582,11 @@ class ScrollyVideo {
         // Use the native timing of the video
         // Works best with animated videos;
         // using the native speed assures that the original easings are respected.
+
+        // Make sure the currentTime we want is close to the currentTime
+        if (Math.abs(this.video.currentTime - this.currentTime) >= this.frameThreshold) {
+          this.video.currentTime = this.currentTime;
+        }
 
         // Add the deltaTime to the currentTime
         this.currentTime += deltaTime * 0.001 * directionFactor;
@@ -719,15 +717,32 @@ class ScrollyVideo {
    */
   setTargetTimePercent(percentage, options = {}) {
     const targetDuration = this.video.duration;
+    const oldTargetTime = this.targetTime;
     // The time we want to transition to
     this.targetTime = Math.max(Math.min(percentage, 1), 0) * targetDuration;
 
     // If we are close enough, return early
-    if (
-      !options.jump &&
-      Math.abs(this.currentTime - this.targetTime) < this.frameThreshold
-    )
+    if (!options.jump && this.currentTimeIsCloseToTarget(this.targetTime)) {
       return;
+    }
+
+    if (
+      this.targetTime > oldTargetTime &&
+      oldTargetTime > this.currentTime &&
+      !this.currentTimeIsCloseToTarget(oldTargetTime)
+    ) {
+      // moving forward in time, and we haven't reached the previous target yet
+      // So we skip forward
+      if (this.debug) console.debug('Skipping forward.')
+      this.currentTime = oldTargetTime;
+    }
+
+    if (this.targetTime < this.currentTime) {
+      // moving backward – we jump
+      if (this.debug) console.debug('Moving backwards, jumping.')
+      this.transitionToTargetTime({...options, jump: true})
+      return;
+    }
 
     // Play the video if we are in video mode
     // I don't understand this. This only starts to play if the video is *not* paused,
@@ -736,6 +751,10 @@ class ScrollyVideo {
 
     this.transitionToTargetTime(options);
   }
+
+  currentTimeIsCloseToTarget = (target) => {
+    return Math.abs(this.currentTime - target) < this.frameThreshold;
+  };
 
   /**
    * Simulate trackScroll programmatically (scrolls on page by percentage of video)
@@ -772,7 +791,7 @@ class ScrollyVideo {
   destroy() {
     if (this.debug) console.log('Destroying ScrollyVideo');
 
-		if (this.decodeWorker) this.decodeWorker.terminate();
+    if (this.decodeWorker) this.decodeWorker.terminate();
 
     if (this.trackScroll)
       // eslint-disable-next-line no-undef
