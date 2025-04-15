@@ -145,6 +145,9 @@ class ScrollyVideo {
     this.isSafari = browserEngine.name === 'WebKit';
     if (debug && this.isSafari) console.info('Safari browser detected');
 
+		const mobileOS = new UAParser().getOS()
+	  this.isAndroid = mobileOS.name === 'Android';
+
     // Initialize state variables
     this.currentTime = 0; // Saves the currentTime of the video, synced with this.video.currentTime
     this.targetTime = 0; // The target time before a transition happens
@@ -230,7 +233,8 @@ class ScrollyVideo {
     this.video.addEventListener('progress', this.resize);
 
     // Calls decode video to attempt webcodecs method
-    if (window.Worker) {
+	  // Not using that on Android for now, because Android devices reliably crash
+    if (window.Worker && !this.isAndroid) {
       this.decodeWorker = new VideoDecoderWorker();
       this.decodeVideo();
     } else {
@@ -292,15 +296,19 @@ class ScrollyVideo {
       }
     } else {
       if (this.debug) console.log('Turning canvas off; falling back to video');
-      // synchronise the current time with the worker
-      this.decodeWorker.postMessage({
-        message: 'GET_CURRENT_TIME',
-        debug: this.debug,
-      });
+      // synchronise the current time with the worker, in case it exists
+      if (this.decodeWorker) {
+	      this.decodeWorker.postMessage({
+		      message: 'GET_CURRENT_TIME',
+		      debug: this.debug,
+	      });
+      }
 
       // Show the video
       //this.video.style.display = 'block';
-      this.canvas.style.display = 'none';
+	    if (this.canvas) {
+		    this.canvas.style.display = 'none';
+	    }
     }
     // Update video to the latest requested frame
     // restart transition
