@@ -1,5 +1,5 @@
 import UAParser from 'ua-parser-js';
-import videoDecoder from './videoDecoder';
+import VideoDecoderWorker from 'web-worker:./videoDecoder';
 import { debounce, isScrollPositionAtTarget } from './utils';
 
 /**
@@ -114,20 +114,17 @@ class ScrollyVideo {
     this.video.muted = true;
     this.video.pause();
     this.video.load();
+    this.setElementExpansion(this.video);
 
     // Adds the video to the container
     this.layoutContainer = document.createElement('div');
     this.layoutContainer.classList.add('scrollyvideo-layout-container');
-    this.layoutContainer.style.display = 'flex';
-    this.layoutContainer.style.justifyContent = 'center';
+    this.layoutContainer.style.position = 'relative';
     this.layoutContainer.style.width = '100%';
     this.layoutContainer.style.height = '100vh';
 
     this.container.appendChild(this.layoutContainer);
-
     this.layoutContainer.appendChild(this.video);
-    this.cavnasContainer = document.createElement('div');
-    this.layoutContainer.appendChild(this.cavnasContainer);
 
     // Setting CSS properties for container
     this.container.classList.add('scrollyvideo-container');
@@ -151,10 +148,6 @@ class ScrollyVideo {
     // Initialize state variables
     this.currentTime = 0; // Saves the currentTime of the video, synced with this.video.currentTime
     this.targetTime = 0; // The target time before a transition happens
-    this.canvas = null; // The canvas for drawing the frames decoded by webCodecs
-    this.context = null; // The canvas context
-    this.frames = []; // The frames decoded by webCodecs
-    this.frameRate = 0; // Calculation of frameRate so we know which frame to paint
 
     const debouncedScroll = debounce(() => {
       // eslint-disable-next-line no-undef
@@ -165,6 +158,11 @@ class ScrollyVideo {
 
     // Add scroll listener for responding to scroll position
     this.updateScrollPercentage = (jump) => {
+      // handle cases where we get an event object instead of a boolean as a parameter
+      if (jump && typeof jump === 'object') {
+        jump = true;
+      }
+
       // Used for internally setting the scroll percentage based on built-in listeners
       const containerBoundingClientRect =
         this.container.parentNode.getBoundingClientRect();
@@ -176,7 +174,7 @@ class ScrollyVideo {
         (containerBoundingClientRect.height - window.innerHeight);
 
       if (this.debug) {
-        console.info('ScrollyVideo scrolled to', scrollPercent);
+        console.debug('ScrollyVideo scrolled to', scrollPercent);
       }
 
       if (this.targetScrollPosition == null) {
@@ -192,7 +190,9 @@ class ScrollyVideo {
     // Add our event listeners for handling changes to the window or scroll
     if (this.trackScroll) {
       // eslint-disable-next-line no-undef
-      window.addEventListener('scroll', this.updateScrollPercentage);
+      window.addEventListener('scroll', this.updateScrollPercentage, {
+        passive: true,
+      });
 
       // Set the initial scroll percentage
       this.video.addEventListener(
@@ -220,11 +220,8 @@ class ScrollyVideo {
 
       // this.videoDimensions = { width, height };
       // Then repaint the canvas, if we are in useWebcodecs
-      if (this.canvas) {
-        this.paintCanvasFrame(
-          Math.floor(this.currentTime * this.frameRate),
-          width,
-        );
+      if (this.useCanvas) {
+        this.setCoverStyle(this.canvas);
       }
     };
 
@@ -233,7 +230,13 @@ class ScrollyVideo {
     this.video.addEventListener('progress', this.resize);
 
     // Calls decode video to attempt webcodecs method
-    this.decodeVideo();
+    if (window.Worker) {
+      this.decodeWorker = new VideoDecoderWorker();
+      this.decodeVideo();
+    } else {
+      this.useCanvas = false;
+    }
+    this.onReady();
   }
 
   /**
@@ -254,6 +257,61 @@ class ScrollyVideo {
    */
   get easing() {
     return this.#easing;
+  }
+
+  #useCanvas = false;
+
+  set useCanvas(value) {
+    this.#useCanvas = value;
+
+    // adapt the visibility of the elements
+    if (value) {
+      if (this.debug) console.log('Switching to using the canvas.');
+      // Draw current frame
+      this.decodeWorker.postMessage({
+        message: 'PAINT_CURRENT_TIME',
+        currentTime: this.currentTime,
+        debug: this.debug,
+      });
+      // cancel current animation
+      window.cancelAnimationFrame(this.transitioningRaf);
+
+      this.canvas.style.display = 'block';
+      // Hide the video
+      // this.video.style.display = 'none';
+
+			// Allow inspection of individual frames
+      if (this.debug) {
+        window.videoscrollerPaintFrame = (frame) => {
+          this.decodeWorker.postMessage({
+            message: 'PAINT_FRAME',
+            frame,
+	          debug: this.debug,
+          });
+        };
+      }
+    } else {
+      if (this.debug) console.log('Turning canvas off; falling back to video');
+      // synchronise the current time with the worker
+      this.decodeWorker.postMessage({
+        message: 'GET_CURRENT_TIME',
+        debug: this.debug,
+      });
+
+      // Show the video
+      //this.video.style.display = 'block';
+      this.canvas.style.display = 'none';
+    }
+    // Update video to the latest requested frame
+    // restart transition
+    this.transitionToTargetTime({
+      transitionSpeed: this.transitionSpeed,
+      easing: this.easing,
+    });
+  }
+
+  get useCanvas() {
+    return this.#useCanvas;
   }
 
   /**
@@ -295,7 +353,16 @@ class ScrollyVideo {
    */
   setCoverStyle(el) {
     el.style.width = '100%';
+    el.style.height = '100%';
     el.style.objectFit = this.objectFit;
+  }
+
+  setElementExpansion(el) {
+    el.style.position = 'absolute';
+    el.style.top = '0';
+    el.style.left = '0';
+    el.style.bottom = '0';
+    el.style.right = '0';
   }
 
   /**
@@ -305,113 +372,89 @@ class ScrollyVideo {
     if (!this.useWebCodecs) {
       if (this.debug)
         console.warn('Cannot perform video decode: `useWebCodes` disabled');
-
       return;
     }
 
     if (!this.src) {
       if (this.debug)
         console.warn('Cannot perform video decode: no `src` found');
-
       return;
     }
 
     try {
-      await videoDecoder(
-        this.src,
-        (frame) => {
-          this.frames.push(frame);
-        },
-        this.debug,
-      );
+      this.decodeWorker.postMessage({
+        src: this.src,
+        debug: this.debug,
+        message: 'REQUEST_DECODE',
+      });
+      this.decodeWorker.onmessage = (event) => {
+        const { message } = event.data;
+        if (this.debug)
+          console.debug(`Received message from worker.`, message, event.data);
+
+        switch (message) {
+          case 'DECODING_SUCCESS':
+            // The video has been decoded, so we can set up the canvas
+            this.canvas = document.createElement('canvas');
+            const offscreen = this.canvas.transferControlToOffscreen();
+            this.layoutContainer.append(this.canvas);
+            this.setElementExpansion(this.canvas);
+            this.setCoverStyle(this.canvas);
+            this.decodeWorker.postMessage(
+              {
+                canvas: offscreen,
+                debug: this.debug,
+                message: 'SETUP_CANVAS',
+                duration: this.video.duration,
+                currentTime: this.currentTime,
+              },
+              [offscreen],
+            );
+            break;
+
+          case 'CANVAS_CREATED':
+            this.useCanvas = true;
+            break;
+
+          case 'CURRENT_TIME':
+            this.currentTime = event.data.currentTime;
+
+            // getting the current time is the last thing we should get when we disable the use of canvas
+            // in this case the worker should be terminated
+            if (!this.useCanvas) {
+              this.decodeWorker.terminate();
+            }
+
+            break;
+
+          default:
+            if (this.debug)
+              console.info('Message was not be processed.', message);
+        }
+      };
     } catch (error) {
       if (this.debug)
         console.error('Error encountered while decoding video', error);
 
-      // Remove all decoded frames if a failure happens during decoding
-      this.frames = [];
-
-      // Force a video reload when videoDecoder fails
-      this.video.load();
+      // move back to video
+      this.useCanvas = false;
+			this.decodeWorker.terminate();
     }
 
-    // If no frames, something went wrong
-    if (this.frames.length === 0) {
-      if (this.debug) console.error('No frames were received from webCodecs');
+    this.decodeWorker.onerror = (event) => {
+      if (this.debug)
+        console.error('Decode Worker encountered an error', event);
 
-      this.onReady();
-      return;
-    }
+      // fall back to video
+      this.useCanvas = false;
+			this.decodeWorker.terminate();
+    };
 
-    // Calculate the frameRate based on number of frames and the duration
-    this.frameRate = this.frames.length / this.video.duration;
-    if (this.debug) console.info('Received', this.frames.length, 'frames');
-    // Remove the video and add the canvas
-    // eslint-disable-next-line no-undef
-    this.canvas = document.createElement('canvas');
-
-    this.context = this.canvas.getContext('2d', { alpha: false });
-
-    // Hide the video and add the canvas to the container
-    this.video.style.display = 'none';
-    this.cavnasContainer.appendChild(this.canvas);
-
-    // Initialize frame cache
-    this.lastDrawnFrame = null;
-    this.lastDrawnFrameNum = -1;
-
-    // Paint our first frame
-    this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
+    // Try to cover all the bases when a user opens another page
+    window.addEventListener('popstate', () => {this.decodeWorker.terminate();});
+    window.addEventListener('pagehide', () => {this.decodeWorker.terminate();});
 
     this.onReady();
-  }
-
-  /**
-   * Paints the frame of to the canvas
-   *
-   * @param frameNum
-   */
-  paintCanvasFrame(frameNum, pwidth) {
-    // Skip if same frame is being drawn
-    if (frameNum === this.lastDrawnFrameNum) {
-      return;
-    }
-
-    // Get the frame and paint it to the canvas
-    const currFrame = this.frames[frameNum];
-
-    if (!this.canvas || !currFrame) {
-      return;
-    }
-
-    if (this.debug) {
-      console.info('Painting frame', frameNum);
-    }
-
-    // Make sure the canvas is scaled properly, similar to setCoverStyle
-    const { width, height } = this.videoDimensions;
-
-    this.canvas.width = currFrame.width;
-    this.canvas.height = currFrame.height;
-
-    if (this.objectFit === 'cover') {
-      // Set canvas display size
-      this.canvas.style.width = `${pwidth}px`;
-      this.canvas.style.height = `${height}px`;
-      this.layoutContainer.style.alignItems = 'unset';
-    } else {
-      this.canvas.style.width = `100%`;
-      this.layoutContainer.style.alignItems = 'center';
-    }
-    this.canvas.style.objectFit = this.objectFit;
-
-    // Clear previous frame
-
-    // Draw the frame to the canvas context
-    this.context.drawImage(currFrame, 0, 0, currFrame.width, currFrame.height);
-
-    // Update frame cache
-    this.lastDrawnFrameNum = frameNum;
   }
 
   /**
@@ -428,7 +471,7 @@ class ScrollyVideo {
    *   argument and returns the eased value, affecting the playback speed during the transition.
    */
   transitionToTargetTime({
-    jump,
+    jump = false,
     transitionSpeed = this.transitionSpeed,
     easing = this.easing,
   }) {
@@ -439,7 +482,35 @@ class ScrollyVideo {
         jump,
         currentTime: this.currentTime,
         targetTime: this.targetTime,
+        useCanvas: this.useCanvas,
       });
+    }
+
+    // hand off request to the web worker if we're using canvas
+    if (this.useCanvas) {
+      {
+        this.decodeWorker.postMessage({
+          message: 'REQUEST_TRANSITION',
+          targetTime: this.targetTime,
+          options: {
+            jump,
+            transitionSpeed,
+            /* easing, */
+          },
+          debug: this.debug,
+        });
+
+        if (jump) {
+          this.currentTime = this.targetTime;
+        }
+
+        return;
+      }
+
+      /*       catch {
+        if (this.debug) console.error('We run into trouble. Falling back to the video.')
+        this.useCanvas = false;
+      } */
     }
 
     const diff = this.targetTime - this.currentTime;
@@ -511,14 +582,9 @@ class ScrollyVideo {
         // When jumping, we go directly to the frame
         this.currentTime = this.targetTime;
 
-        if (this.canvas) {
-          // Canvas Mode
-          this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
-        } else {
-          // Video Mode
-          this.video.pause();
-          this.video.currentTime = this.currentTime;
-        }
+        // Video Mode
+        this.video.pause();
+        this.video.currentTime = this.currentTime;
       } else if (transitionSpeed === 0) {
         // Use the native timing of the video
         // Works best with animated videos;
@@ -526,9 +592,7 @@ class ScrollyVideo {
 
         // Add the deltaTime to the currentTime
         this.currentTime += deltaTime * 0.001 * directionFactor;
-        if (this.canvas) {
-          this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
-        } else if (isForwardTransition) {
+        if (isForwardTransition) {
           // Video Mode
           this.video.play(); // Set video to playing
           this.currentTime = this.video.currentTime;
@@ -568,9 +632,7 @@ class ScrollyVideo {
         this.currentTime =
           startCurrentTime + easedProgress * duration * directionFactor * 0.001;
 
-        if (this.canvas) {
-          this.paintCanvasFrame(Math.floor(this.currentTime * this.frameRate));
-        } else if (this.isSafari || !isForwardTransition) {
+        if (this.isSafari || !isForwardTransition) {
           // We can't use a negative playbackRate, so if the video needs to go backwards,
           // We have to use the inefficient method of modifying currentTime rapidly to
           // get an effect.
@@ -604,7 +666,7 @@ class ScrollyVideo {
           );
 
           if (this.debug)
-            console.info('ScrollyVideo playbackRate:', desiredPlaybackRate);
+            console.debug('ScrollyVideo playbackRate:', desiredPlaybackRate);
           // eslint-disable-next-line no-restricted-globals
           if (!isNaN(desiredPlaybackRate)) {
             this.video.playbackRate = desiredPlaybackRate;
@@ -656,10 +718,7 @@ class ScrollyVideo {
    *   returns the eased value, affecting the playback speed during the transition.
    */
   setTargetTimePercent(percentage, options = {}) {
-    const targetDuration =
-      this.frames.length && this.frameRate
-        ? this.frames.length / this.frameRate
-        : this.video.duration;
+    const targetDuration = this.video.duration;
     // The time we want to transition to
     this.targetTime = Math.max(Math.min(percentage, 1), 0) * targetDuration;
 
@@ -673,7 +732,7 @@ class ScrollyVideo {
     // Play the video if we are in video mode
     // I don't understand this. This only starts to play if the video is *not* paused,
     // as in: already playing? WTF?
-    if (!this.canvas && !this.video.paused) this.video.play();
+    if (!this.useCanvas && !this.video.paused) this.video.play();
 
     this.transitionToTargetTime(options);
   }
@@ -711,7 +770,9 @@ class ScrollyVideo {
    * Call to destroy this ScrollyVideo object
    */
   destroy() {
-    if (this.debug) console.info('Destroying ScrollyVideo');
+    if (this.debug) console.log('Destroying ScrollyVideo');
+
+		if (this.decodeWorker) this.decodeWorker.terminate();
 
     if (this.trackScroll)
       // eslint-disable-next-line no-undef
@@ -719,12 +780,6 @@ class ScrollyVideo {
 
     // eslint-disable-next-line no-undef
     window.removeEventListener('resize', this.resize);
-
-    // Clear frames from memory
-    if (this.frames) {
-      this.frames.forEach((frame) => frame.close());
-      this.frames = [];
-    }
 
     // Clear component
     if (this.container) this.container.innerHTML = '';
