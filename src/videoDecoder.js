@@ -498,8 +498,9 @@ self.onmessage = (event) => {
 
     case 'REQUEST_TRANSITION':
       cancelAnimationFrame(transitioningRaf);
-      const { targetTime: passedTargetTime, options } = event.data;
+      const { targetTime: passedTargetTime, options, currentTime: stillCurrentTime } = event.data;
       targetTime = passedTargetTime;
+      currentTime = stillCurrentTime;
       transitionToTargetTime(options, debug);
       break;
 
