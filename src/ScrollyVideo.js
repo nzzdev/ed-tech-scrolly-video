@@ -147,6 +147,8 @@ class ScrollyVideo {
 
 		const mobileOS = new UAParser().getOS()
 	  this.isAndroid = mobileOS.name === 'Android';
+		this.isIOS = mobileOS.name === 'iOS';
+		this.isMobileDevice = this.isAndroid || this.isIOS
 
     // Initialize state variables
     this.currentTime = 0; // Saves the currentTime of the video, synced with this.video.currentTime
@@ -234,7 +236,7 @@ class ScrollyVideo {
 
     // Calls decode video to attempt webcodecs method
 	  // Not using that on Android for now, because Android devices reliably crash
-    if (window.Worker && !this.isAndroid) {
+    if (window.Worker && !this.isMobileDevice) {
       this.decodeWorker = new VideoDecoderWorker();
       this.decodeVideo();
     } else {
