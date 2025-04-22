@@ -5,12 +5,31 @@
   "type": "module",
   "main": "dist/scrolly-video.js",
   "types": "dist/ScrollyVideo.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/ScrollyVideo.d.ts",
+      "import": "./dist/scrolly-video.js",
+      "require": "./dist/scrolly-video.cjs"
+    },
+    "./ScrollyVideo.svelte": {
+      "import": "./dist/svelte.js",
+      "require": "./dist/svelte.cjs"
+    },
+    "./ScrollyVideo.vue": {
+      "import": "./dist/vue.js",
+      "require": "./dist/vue.cjs"
+    },
+    "./ScrollyVideo.jsx": {
+      "import": "./dist/react.js",
+      "require": "./dist/react.cjs"
+    }
+  },
   "scripts": {
-    "dev": "DOCS_SITE=true rollup -c -w",
-    "build": "rimraf dist && rollup -c",
-    "build-docs": "rimraf build && DOCS_SITE=true rollup -c",
+    "dev": "npx vite",
+    "build": "npx vite build --mode library",
+    "build-docs": "npx vite build",
     "postbuild": "tsc",
-    "start": "sirv build",
+    "start": "npx vite",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
     "prepublishOnly": "npm run build",

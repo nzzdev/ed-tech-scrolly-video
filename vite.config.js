@@ -9,10 +9,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const libraryBuild = {
   lib: {
     entry: {
+      "scrolly-video": resolve(__dirname, 'src/ScrollyVideo.js'),
       svelte: resolve(__dirname, 'src/ScrollyVideo.svelte'),
       react: resolve(__dirname, 'src/ScrollyVideo.jsx'),
       vue: resolve(__dirname, 'src/ScrollyVideo.vue'),
-      ScrollyVideo: resolve(__dirname, 'src/ScrollyVideo.js'),
     },
     name: 'ScrollyVideo',
   },
