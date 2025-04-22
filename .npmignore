@@ -4,5 +4,11 @@
 src
 public
 demos
+build
+site
+dist/*
+!dist/**/*.js
+!dist/**/*.cjs
+!dist/**/*.d.ts
 
 rollup.config.js
