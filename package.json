@@ -25,11 +25,11 @@
     }
   },
   "scripts": {
-    "dev": "npx vite",
-    "build": "npx vite build --mode library",
-    "build-docs": "npx vite build",
+    "dev": "vite",
+    "build": "vite build --mode library",
+    "build-docs": "vite build",
     "postbuild": "tsc",
-    "start": "npx vite",
+    "start": "vite",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
     "prepublishOnly": "npm run build",
