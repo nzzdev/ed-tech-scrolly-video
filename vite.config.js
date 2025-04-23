@@ -23,9 +23,28 @@ const libraryBuild = {
 
 const docsBuild = {};
 
+const docsBuildPlugins = [svelte(), vue()]
+const libraryBuildPlugins = [viteWrapCodeInIIFE()]
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   base: './',
-  plugins: [svelte(), vue()],
+  plugins: mode === 'library' ? libraryBuildPlugins.concat(docsBuildPlugins) : docsBuildPlugins,
   build: mode === 'library' ? libraryBuild : docsBuild,
 }));
+
+
+function viteWrapCodeInIIFE(options = {}) {
+  return {
+    name: 'vite-wrap-code-in-iife',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle(outputOptions, bundle) {
+      for (const [fileName, chunkOrAsset] of Object.entries(bundle)) {
+        if (chunkOrAsset.type === 'chunk' && options.files && options.files.includes(fileName)) {
+          chunkOrAsset.code = `(function () {${chunkOrAsset.code}})();`;
+        }
+      }
+    },
+  };
+}
