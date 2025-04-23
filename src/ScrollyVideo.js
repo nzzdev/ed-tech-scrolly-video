@@ -1,6 +1,6 @@
 import UAParser from 'ua-parser-js';
-import VideoDecoderWorker from 'web-worker:./videoDecoder';
 import { debounce, isScrollPositionAtTarget } from './utils';
+import DecodeWorker from './videoDecoder.js?worker&inline'
 
 /**
  *   ____                 _ _     __     ___     _
@@ -237,7 +237,7 @@ class ScrollyVideo {
     // Calls decode video to attempt webcodecs method
 	  // Not using that on Android for now, because Android devices reliably crash
     if (window.Worker && !this.isMobileDevice) {
-      this.decodeWorker = new VideoDecoderWorker();
+      this.decodeWorker = new DecodeWorker()
       this.decodeVideo();
     } else {
       this.useCanvas = false;
@@ -459,6 +459,10 @@ class ScrollyVideo {
       this.useCanvas = false;
       this.decodeWorker.terminate();
     };
+
+    // Try to cover all the bases when a user opens another page
+    window.addEventListener('popstate', () => {this.decodeWorker.terminate();});
+    window.addEventListener('pagehide', () => {this.decodeWorker.terminate();});
 
     this.onReady();
   }
