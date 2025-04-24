@@ -12,20 +12,27 @@
       "require": "./dist/scrolly-video.cjs"
     },
     "./ScrollyVideo.svelte": {
-      "import": "./dist/svelte.js",
-      "require": "./dist/svelte.cjs"
+      "types": "./dist/ScrollyVideo.svelte.d.ts",
+      "svelte": "./dist/ScrollyVideo.svelte"
+    },
+    "./ScrollyVideo.vue.js": {
+      "import": "./dist/ScrollyVideo.vue.js",
+      "require": "./dist/ScrollyVideo.vue.cjs"
+    },
+    "./ScrollyVideo.react.js": {
+      "import": "./dist/ScrollyVideo.react.js",
+      "require": "./dist/ScrollyVideo.react.cjs"
     },
     "./ScrollyVideo.vue": {
-      "import": "./dist/vue.js",
-      "require": "./dist/vue.cjs"
+      "default": "./dist/ScrollyVideo.vue"
     },
     "./ScrollyVideo.jsx": {
-      "import": "./dist/react.js",
-      "require": "./dist/react.cjs"
+      "default": "./dist/ScrollyVideo.jsx"
     }
   },
   "scripts": {
     "dev": "vite",
+    "prebuild": "svelte-package --input src",
     "build": "vite build --mode library",
     "build-docs": "vite build",
     "postbuild": "tsc",
@@ -57,6 +64,7 @@
   },
   "devDependencies": {
     "@humanspeak/svelte-markdown": "^0.8.1",
+    "@sveltejs/package": "^2.3.11",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/compiler-sfc": "^3.2.45",
