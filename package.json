@@ -1,6 +1,6 @@
 {
   "name": "@nzz/et-video-scroller",
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.4",
   "description": "A component for scroll-based (or other externally controlled) playback.",
   "type": "module",
   "main": "dist/scrolly-video.js",
