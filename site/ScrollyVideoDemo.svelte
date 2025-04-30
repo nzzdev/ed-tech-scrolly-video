@@ -26,7 +26,7 @@
 
 <div class="video-container">
   {#if url}
-    <ScrollyVideo src={url} {trackScroll} {videoPercentage} />
+    <ScrollyVideo src={url} {trackScroll} {videoPercentage} objectFit="cover" posterSrcUrl="https://unsplash.com/photos/Ci45QAMjzpY/download?ixid=M3wxMjA3fDB8MXxzZWFyY2h8MTJ8fGdvbGRlbiUyMGdhdGUlMjBicmlkZ2V8ZGV8MHx8fHwxNzQ2MDE1MjEyfDI&force=true&w=2400" />
   {/if}
 
   {#each cards as card}

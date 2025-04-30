@@ -48,4 +48,4 @@
   });
 </script>
 
-<div bind:this={scrollyVideoContainer} data-scrolly-container />
+<div bind:this={scrollyVideoContainer} data-scrolly-container></div>
