@@ -25,15 +25,15 @@ const libraryBuild = {
   lib: {
     entry: {
       'scrolly-video': resolve(__dirname, 'src/ScrollyVideo.js'),
-      svelte: resolve(__dirname, 'src/ScrollyVideo.svelte'),
-      react: resolve(__dirname, 'src/ScrollyVideo.jsx'),
-      vue: resolve(__dirname, 'src/ScrollyVideo.vue'),
+      'ScrollyVideo.react': resolve(__dirname, 'src/ScrollyVideo.jsx'),
+      'ScrollyVideo.vue': resolve(__dirname, 'src/ScrollyVideo.vue'),
     },
     name: 'ScrollyVideo',
   },
   rollupOptions: {
     external: ['svelte', 'vue', 'mp4boxjs', 'react', 'ua-parser-js'],
   },
+  emptyOutDir: false,
 };
 
 /**
