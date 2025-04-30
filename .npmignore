@@ -10,5 +10,9 @@ dist/*
 !dist/**/*.js
 !dist/**/*.cjs
 !dist/**/*.d.ts
+!dist/**/*.svelte
+!dist/**/*.map
+!dist/**/*.vue
+!dist/**/*.jsx
 
 rollup.config.js

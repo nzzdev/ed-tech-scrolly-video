@@ -43,6 +43,7 @@ class ScrollyVideo {
    * @param {boolean} [opts.debug=false] - Whether to print debug stats to the console
    * @param {(number) => number} [opts.easing=(x)=>x] - When using `transitionSpeed`, which easing
    *   function to use to smooth out the animation
+   * @param {string} [opts.posterSrcUrl] - An URL for an image to be used as the poster of the video
    */
   constructor({
     src,
@@ -58,6 +59,7 @@ class ScrollyVideo {
     onChange = () => {},
     debug = false,
     easing = (x) => x,
+    posterSrcUrl,
   }) {
     // Make sure that we have a DOM
     if (typeof document !== 'object') {
@@ -115,6 +117,12 @@ class ScrollyVideo {
     this.video.pause();
     this.video.load();
     this.setElementExpansion(this.video);
+
+    // Set the poster
+    if (posterSrcUrl) {
+      this.video.poster = posterSrcUrl;
+    }
+
 
     // Adds the video to the container
     this.layoutContainer = document.createElement('div');
