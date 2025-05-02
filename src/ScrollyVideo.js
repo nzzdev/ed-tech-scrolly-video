@@ -99,6 +99,7 @@ class ScrollyVideo {
     this.objectFit = objectFit;
     this.sticky = sticky;
     this.trackScroll = trackScroll;
+    this.lockScroll = lockScroll;
     this.onReady = onReady;
     this.onChange = onChange;
     this.debug = debug;
@@ -347,7 +348,7 @@ class ScrollyVideo {
 
     this.onChange(percentage);
 
-    if (this.trackScroll) {
+    if (this.trackScroll && this.lockScroll) {
       this.setScrollPercent(percentage);
     }
 
