@@ -135,9 +135,25 @@ const decodeVideo = (
       });
 
       mp4boxfile.onReady = (info) => {
+
         if (info && info.videoTracks && info.videoTracks[0]) {
           [{ codec }] = info.videoTracks;
           if (debug) console.info('Video with codec:', codec);
+          const vTrack = info.videoTracks[0];
+          const size = vTrack.nb_samples * vTrack.video.width * vTrack.video.height;
+          const sizeInGb = size / 1024 / 1024 / 1024;
+          console.info(`NZZ Video Scroller: Actual decoded video size: ${sizeInGb} GB`);
+          console.table({
+            sizeInGb,
+            duration: vTrack.duration,
+            frames: vTrack.nb_samples,
+            videoWidth: vTrack.video.width,
+            videoHeight: vTrack.video.height
+          })
+
+          if(sizeInGb > 8) {
+            throw new Error('Video is too big to decode. Fall back to video mode.');
+          }
 
           // Gets the avccbox used for reading extradata
           const avccBox =
