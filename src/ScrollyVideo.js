@@ -237,13 +237,42 @@ class ScrollyVideo {
     window.addEventListener('resize', this.resize);
     this.video.addEventListener('progress', this.resize);
 
-    // Calls decode video to attempt webcodecs method
-    if (window.Worker) {
-      this.decodeWorker = new DecodeWorker();
-      this.decodeVideo();
-    } else {
-      this.useCanvas = false;
+    // We're only using the canvas method when scroll tracking is enabled
+    if (this.trackScroll) {
+      this.video.addEventListener(
+        'loadedmetadata',
+        () => {
+          // calculate the prospective size of the decoded video
+          const size =
+            this.video.videoWidth *
+            this.video.videoHeight *
+            30 *
+            this.video.duration;
+          const sizeInGb = size / 1024 / 1024 / 1024;
+          console.info(`NZZ Video Scroller: Prospective size of decoded video: ${sizeInGb}GB`);
+          console.table({
+            sizeInGb,
+            duration: this.video.duration,
+            assumedFrames: this.video.duration * 30,
+            videoWidth: this.video.videoWidth,
+            videoHeight: this.video.videoHeight,
+          })
+
+          // Calls decode video to attempt webcodecs method
+          // Only decode if assumed size is below 8 GB (which is pretty big already)
+          //TODO: Adapt size limits to different devices
+          if (sizeInGb < 8 && window.Worker) {
+            this.decodeWorker = new DecodeWorker();
+            this.decodeVideo();
+          } else {
+            if (sizeInGb > 8) console.info('NZZ Video Scroller: Video is likely too big to decode, falling back to video mode.')
+            this.useCanvas = false;
+          }
+        },
+        { once: true },
+      );
     }
+
     this.onReady();
   }
 
@@ -707,12 +736,13 @@ class ScrollyVideo {
       previousAnimationFrameTimestamp = timestamp;
       if (typeof window.requestAnimationFrame === 'function') {
         // eslint-disable-next-line no-undef
-        this.transitioningRaf = window.requestAnimationFrame((currentTimestamp) =>
-          tick({
-            startCurrentTime,
-            startTimestamp,
-            timestamp: currentTimestamp,
-          }),
+        this.transitioningRaf = window.requestAnimationFrame(
+          (currentTimestamp) =>
+            tick({
+              startCurrentTime,
+              startTimestamp,
+              timestamp: currentTimestamp,
+            }),
         );
       }
     };
