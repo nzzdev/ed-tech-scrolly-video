@@ -1,6 +1,6 @@
 import UAParser from 'ua-parser-js';
 import { debounce, isScrollPositionAtTarget } from './utils';
-import DecodeWorker from './videoDecoder.js?worker&inline'
+import DecodeWorker from './videoDecoder.js?worker&inline';
 
 /**
  *   ____                 _ _     __     ___     _
@@ -124,7 +124,6 @@ class ScrollyVideo {
       this.video.poster = posterSrcUrl;
     }
 
-
     // Adds the video to the container
     this.layoutContainer = document.createElement('div');
     this.layoutContainer.classList.add('scrollyvideo-layout-container');
@@ -240,7 +239,7 @@ class ScrollyVideo {
 
     // Calls decode video to attempt webcodecs method
     if (window.Worker) {
-      this.decodeWorker = new DecodeWorker()
+      this.decodeWorker = new DecodeWorker();
       this.decodeVideo();
     } else {
       this.useCanvas = false;
@@ -289,13 +288,13 @@ class ScrollyVideo {
       // Hide the video
       // this.video.style.display = 'none';
 
-			// Allow inspection of individual frames
+      // Allow inspection of individual frames
       if (this.debug) {
         window.videoscrollerPaintFrame = (frame) => {
           this.decodeWorker.postMessage({
             message: 'PAINT_FRAME',
             frame,
-	          debug: this.debug,
+            debug: this.debug,
           });
         };
       }
@@ -455,7 +454,7 @@ class ScrollyVideo {
 
       // move back to video
       this.useCanvas = false;
-			this.decodeWorker.terminate();
+      this.decodeWorker.terminate();
     }
 
     this.decodeWorker.onerror = (event) => {
@@ -464,7 +463,7 @@ class ScrollyVideo {
 
       // fall back to video
       this.useCanvas = false;
-			this.decodeWorker.terminate();
+      this.decodeWorker.terminate();
     };
 
     // Try to cover all the bases when a user opens another page
@@ -563,11 +562,29 @@ class ScrollyVideo {
         ? this.currentTime >= this.targetTime
         : this.currentTime <= this.targetTime;
 
+      if (hasPassedThreshold || Number.isNaN(this.targetTime)) {
+        this.video.pause();
+        if (this.transitioningRaf) {
+          // eslint-disable-next-line no-undef
+          window.cancelAnimationFrame(this.transitioningRaf);
+          this.transitioningRaf = null;
+        }
+        return;
+      }
+
+      // Before we do all the calculations, handle the simple case first: jumping to a timestamp
+      if (jump) {
+        // When jumping, we go directly to the frame
+        this.currentTime = this.targetTime;
+        this.transitioningRaf = null;
+        return;
+      }
+
       // If we are already close enough to our target, pause the video and return.
       // This is the base case of the recursive function
       if (
         // eslint-disable-next-line no-restricted-globals
-        isNaN(this.targetTime) ||
+        Number.isNaN(this.targetTime) ||
         // If the currentTime is already close enough to the targetTime
         Math.abs(this.targetTime - this.currentTime) < this.frameThreshold ||
         hasPassedThreshold
@@ -576,7 +593,7 @@ class ScrollyVideo {
 
         if (this.transitioningRaf) {
           // eslint-disable-next-line no-undef
-          cancelAnimationFrame(this.transitioningRaf);
+          window.cancelAnimationFrame(this.transitioningRaf);
           this.transitioningRaf = null;
         }
 
@@ -598,15 +615,7 @@ class ScrollyVideo {
        */
       const deltaTime = timestamp - previousAnimationFrameTimestamp;
 
-      // Before we do all the calculations, handle the simple case first: jumping to a timestamp
-      if (jump) {
-        // When jumping, we go directly to the frame
-        this.currentTime = this.targetTime;
-
-        // Video Mode
-        this.video.pause();
-        this.video.currentTime = this.currentTime;
-      } else if (transitionSpeed === 0) {
+      if (transitionSpeed === 0) {
         // Use the native timing of the video
         // Works best with animated videos;
         // using the native speed assures that the original easings are respected.
@@ -696,9 +705,9 @@ class ScrollyVideo {
 
       // Recursively calls ourselves until the animation is done.
       previousAnimationFrameTimestamp = timestamp;
-      if (typeof requestAnimationFrame === 'function') {
+      if (typeof window.requestAnimationFrame === 'function') {
         // eslint-disable-next-line no-undef
-        this.transitioningRaf = requestAnimationFrame((currentTimestamp) =>
+        this.transitioningRaf = window.requestAnimationFrame((currentTimestamp) =>
           tick({
             startCurrentTime,
             startTimestamp,
@@ -708,9 +717,9 @@ class ScrollyVideo {
       }
     };
 
-    if (typeof requestAnimationFrame === 'function') {
+    if (typeof window.requestAnimationFrame === 'function') {
       // eslint-disable-next-line no-undef
-      this.transitioningRaf = requestAnimationFrame((startTimestamp) => {
+      this.transitioningRaf = window.requestAnimationFrame((startTimestamp) => {
         previousAnimationFrameTimestamp = startTimestamp;
         tick({
           startCurrentTime: this.currentTime,
@@ -789,7 +798,7 @@ class ScrollyVideo {
   destroy() {
     if (this.debug) console.log('Destroying ScrollyVideo');
 
-		if (this.decodeWorker) this.decodeWorker.terminate();
+    if (this.decodeWorker) this.decodeWorker.terminate();
 
     if (this.trackScroll)
       // eslint-disable-next-line no-undef
