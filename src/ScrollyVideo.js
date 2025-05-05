@@ -323,6 +323,14 @@ class ScrollyVideo {
     return this.#useCanvas;
   }
 
+  get currentTime() {
+    return this.video.currentTime;
+  }
+
+  set currentTime(value) {
+    this.video.currentTime = value;
+  }
+
   /**
    * Sets the currentTime of the video as a specified percentage of its total duration.
    *
@@ -603,12 +611,9 @@ class ScrollyVideo {
         // Works best with animated videos;
         // using the native speed assures that the original easings are respected.
 
-        // Add the deltaTime to the currentTime
-        this.currentTime += deltaTime * 0.001 * directionFactor;
         if (isForwardTransition) {
           // Video Mode
           this.video.play(); // Set video to playing
-          this.currentTime = this.video.currentTime;
           // --> go to the next animation frame, check if currentTime === targetTime, stop
         } else {
           // We're going backward!
@@ -616,7 +621,8 @@ class ScrollyVideo {
           // We have to use the inefficient method of modifying currentTime rapidly to
           // get an effect.
           this.video.pause();
-          this.video.currentTime = this.currentTime;
+          // Add the deltaTime to the currentTime
+          this.currentTime += deltaTime * 0.001 * directionFactor;
           // --> go to the next animation frame
         }
       } else {
@@ -641,16 +647,16 @@ class ScrollyVideo {
         const easedProgress =
           easing && Number.isFinite(progress) ? easing(progress) : progress;
 
-        // Calculate desired currentTime; multiply with 0.001 since this one is in seconds
-        this.currentTime =
-          startCurrentTime + easedProgress * duration * directionFactor * 0.001;
-
         if (this.isSafari || !isForwardTransition) {
           // We can't use a negative playbackRate, so if the video needs to go backwards,
           // We have to use the inefficient method of modifying currentTime rapidly to
           // get an effect.
           this.video.pause();
-          this.video.currentTime = this.currentTime;
+
+          // Calculate desired currentTime; multiply with 0.001 since this one is in seconds
+          this.currentTime =
+            startCurrentTime +
+            easedProgress * duration * directionFactor * 0.001;
         } else {
           // Otherwise, we play the video and adjust the playbackRate to get a smoother
           // animation effect.
@@ -685,8 +691,6 @@ class ScrollyVideo {
             this.video.playbackRate = desiredPlaybackRate;
             this.video.play();
           }
-          // Set the currentTime to the video's currentTime
-          this.currentTime = this.video.currentTime;
         }
       }
 
