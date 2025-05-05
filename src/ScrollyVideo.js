@@ -1,6 +1,6 @@
 import UAParser from 'ua-parser-js';
 import { debounce, isScrollPositionAtTarget } from './utils';
-import DecodeWorker from './videoDecoder.js?worker&inline'
+import DecodeWorker from './videoDecoder.js?worker&inline';
 
 /**
  *   ____                 _ _     __     ___     _
@@ -124,7 +124,6 @@ class ScrollyVideo {
       this.video.poster = posterSrcUrl;
     }
 
-
     // Adds the video to the container
     this.layoutContainer = document.createElement('div');
     this.layoutContainer.classList.add('scrollyvideo-layout-container');
@@ -238,13 +237,42 @@ class ScrollyVideo {
     window.addEventListener('resize', this.resize);
     this.video.addEventListener('progress', this.resize);
 
-    // Calls decode video to attempt webcodecs method
-    if (window.Worker) {
-      this.decodeWorker = new DecodeWorker()
-      this.decodeVideo();
-    } else {
-      this.useCanvas = false;
+    // We're only using the canvas method when scroll tracking is enabled
+    if (this.trackScroll) {
+      this.video.addEventListener(
+        'loadedmetadata',
+        () => {
+          // calculate the prospective size of the decoded video
+          const size =
+            this.video.videoWidth *
+            this.video.videoHeight *
+            30 *
+            this.video.duration;
+          const sizeInGb = size / 1024 / 1024 / 1024;
+          console.info(`NZZ Video Scroller: Prospective size of decoded video: ${sizeInGb}GB`);
+          console.table({
+            sizeInGb,
+            duration: this.video.duration,
+            assumedFrames: this.video.duration * 30,
+            videoWidth: this.video.videoWidth,
+            videoHeight: this.video.videoHeight,
+          })
+
+          // Calls decode video to attempt webcodecs method
+          // Only decode if assumed size is below 8 GB (which is pretty big already)
+          //TODO: Adapt size limits to different devices
+          if (sizeInGb < 8 && window.Worker) {
+            this.decodeWorker = new DecodeWorker();
+            this.decodeVideo();
+          } else {
+            if (sizeInGb > 8) console.info('NZZ Video Scroller: Video is likely too big to decode, falling back to video mode.')
+            this.useCanvas = false;
+          }
+        },
+        { once: true },
+      );
     }
+
     this.onReady();
   }
 
@@ -289,13 +317,13 @@ class ScrollyVideo {
       // Hide the video
       // this.video.style.display = 'none';
 
-			// Allow inspection of individual frames
+      // Allow inspection of individual frames
       if (this.debug) {
         window.videoscrollerPaintFrame = (frame) => {
           this.decodeWorker.postMessage({
             message: 'PAINT_FRAME',
             frame,
-	          debug: this.debug,
+            debug: this.debug,
           });
         };
       }
@@ -321,6 +349,14 @@ class ScrollyVideo {
 
   get useCanvas() {
     return this.#useCanvas;
+  }
+
+  get currentTime() {
+    return this.video.currentTime;
+  }
+
+  set currentTime(value) {
+    this.video.currentTime = value;
   }
 
   /**
@@ -447,7 +483,7 @@ class ScrollyVideo {
 
       // move back to video
       this.useCanvas = false;
-			this.decodeWorker.terminate();
+      this.decodeWorker.terminate();
     }
 
     this.decodeWorker.onerror = (event) => {
@@ -456,12 +492,8 @@ class ScrollyVideo {
 
       // fall back to video
       this.useCanvas = false;
-			this.decodeWorker.terminate();
+      this.decodeWorker.terminate();
     };
-
-    // Try to cover all the bases when a user opens another page
-    window.addEventListener('popstate', () => {this.decodeWorker.terminate();});
-    window.addEventListener('pagehide', () => {this.decodeWorker.terminate();});
 
     // Try to cover all the bases when a user opens another page
     window.addEventListener('popstate', () => {
@@ -559,11 +591,29 @@ class ScrollyVideo {
         ? this.currentTime >= this.targetTime
         : this.currentTime <= this.targetTime;
 
+      if (hasPassedThreshold || Number.isNaN(this.targetTime)) {
+        this.video.pause();
+        if (this.transitioningRaf) {
+          // eslint-disable-next-line no-undef
+          window.cancelAnimationFrame(this.transitioningRaf);
+          this.transitioningRaf = null;
+        }
+        return;
+      }
+
+      // Before we do all the calculations, handle the simple case first: jumping to a timestamp
+      if (jump) {
+        // When jumping, we go directly to the frame
+        this.currentTime = this.targetTime;
+        this.transitioningRaf = null;
+        return;
+      }
+
       // If we are already close enough to our target, pause the video and return.
       // This is the base case of the recursive function
       if (
         // eslint-disable-next-line no-restricted-globals
-        isNaN(this.targetTime) ||
+        Number.isNaN(this.targetTime) ||
         // If the currentTime is already close enough to the targetTime
         Math.abs(this.targetTime - this.currentTime) < this.frameThreshold ||
         hasPassedThreshold
@@ -572,7 +622,7 @@ class ScrollyVideo {
 
         if (this.transitioningRaf) {
           // eslint-disable-next-line no-undef
-          cancelAnimationFrame(this.transitioningRaf);
+          window.cancelAnimationFrame(this.transitioningRaf);
           this.transitioningRaf = null;
         }
 
@@ -594,25 +644,14 @@ class ScrollyVideo {
        */
       const deltaTime = timestamp - previousAnimationFrameTimestamp;
 
-      // Before we do all the calculations, handle the simple case first: jumping to a timestamp
-      if (jump) {
-        // When jumping, we go directly to the frame
-        this.currentTime = this.targetTime;
-
-        // Video Mode
-        this.video.pause();
-        this.video.currentTime = this.currentTime;
-      } else if (transitionSpeed === 0) {
+      if (transitionSpeed === 0) {
         // Use the native timing of the video
         // Works best with animated videos;
         // using the native speed assures that the original easings are respected.
 
-        // Add the deltaTime to the currentTime
-        this.currentTime += deltaTime * 0.001 * directionFactor;
         if (isForwardTransition) {
           // Video Mode
           this.video.play(); // Set video to playing
-          this.currentTime = this.video.currentTime;
           // --> go to the next animation frame, check if currentTime === targetTime, stop
         } else {
           // We're going backward!
@@ -620,7 +659,8 @@ class ScrollyVideo {
           // We have to use the inefficient method of modifying currentTime rapidly to
           // get an effect.
           this.video.pause();
-          this.video.currentTime = this.currentTime;
+          // Add the deltaTime to the currentTime
+          this.currentTime += deltaTime * 0.001 * directionFactor;
           // --> go to the next animation frame
         }
       } else {
@@ -645,16 +685,16 @@ class ScrollyVideo {
         const easedProgress =
           easing && Number.isFinite(progress) ? easing(progress) : progress;
 
-        // Calculate desired currentTime; multiply with 0.001 since this one is in seconds
-        this.currentTime =
-          startCurrentTime + easedProgress * duration * directionFactor * 0.001;
-
         if (this.isSafari || !isForwardTransition) {
           // We can't use a negative playbackRate, so if the video needs to go backwards,
           // We have to use the inefficient method of modifying currentTime rapidly to
           // get an effect.
           this.video.pause();
-          this.video.currentTime = this.currentTime;
+
+          // Calculate desired currentTime; multiply with 0.001 since this one is in seconds
+          this.currentTime =
+            startCurrentTime +
+            easedProgress * duration * directionFactor * 0.001;
         } else {
           // Otherwise, we play the video and adjust the playbackRate to get a smoother
           // animation effect.
@@ -689,28 +729,27 @@ class ScrollyVideo {
             this.video.playbackRate = desiredPlaybackRate;
             this.video.play();
           }
-          // Set the currentTime to the video's currentTime
-          this.currentTime = this.video.currentTime;
         }
       }
 
       // Recursively calls ourselves until the animation is done.
       previousAnimationFrameTimestamp = timestamp;
-      if (typeof requestAnimationFrame === 'function') {
+      if (typeof window.requestAnimationFrame === 'function') {
         // eslint-disable-next-line no-undef
-        this.transitioningRaf = requestAnimationFrame((currentTimestamp) =>
-          tick({
-            startCurrentTime,
-            startTimestamp,
-            timestamp: currentTimestamp,
-          }),
+        this.transitioningRaf = window.requestAnimationFrame(
+          (currentTimestamp) =>
+            tick({
+              startCurrentTime,
+              startTimestamp,
+              timestamp: currentTimestamp,
+            }),
         );
       }
     };
 
-    if (typeof requestAnimationFrame === 'function') {
+    if (typeof window.requestAnimationFrame === 'function') {
       // eslint-disable-next-line no-undef
-      this.transitioningRaf = requestAnimationFrame((startTimestamp) => {
+      this.transitioningRaf = window.requestAnimationFrame((startTimestamp) => {
         previousAnimationFrameTimestamp = startTimestamp;
         tick({
           startCurrentTime: this.currentTime,
@@ -789,7 +828,7 @@ class ScrollyVideo {
   destroy() {
     if (this.debug) console.log('Destroying ScrollyVideo');
 
-		if (this.decodeWorker) this.decodeWorker.terminate();
+    if (this.decodeWorker) this.decodeWorker.terminate();
 
     if (this.trackScroll)
       // eslint-disable-next-line no-undef
