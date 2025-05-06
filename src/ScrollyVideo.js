@@ -262,14 +262,20 @@ class ScrollyVideo {
             videoHeight: this.video.videoHeight,
           })
 
+          /**
+           * Set size limit for decoding video.
+           * Use lower limit on Android devices, because they are prone to crash.
+           * @type {number}
+           */
+          let sizelimit = 8
+          if (this.isAndroid) sizelimit = 2
+
           // Calls decode video to attempt webcodecs method
-          // Only decode if assumed size is below 8 GB (which is pretty big already)
-          //TODO: Adapt size limits to different devices
-          if (sizeInGb < 8 && window.Worker) {
+          if (sizeInGb < sizelimit && window.Worker) {
             this.decodeWorker = new DecodeWorker();
             this.decodeVideo();
           } else {
-            if (sizeInGb > 8) console.info('NZZ Video Scroller: Video is likely too big to decode, falling back to video mode.')
+            if (sizeInGb > sizelimit) console.info('NZZ Video Scroller: Video is likely too big to decode, falling back to video mode.')
             this.useCanvas = false;
           }
         },
