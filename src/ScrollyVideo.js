@@ -38,6 +38,7 @@ class ScrollyVideo {
    * @param {boolean} [opts.useWebCodecs=true] - Decode the video and paint the frames to a canvas
    *   element. Helps getting a smoother animation (especially when going backwards), but requires
    *   more performance.
+   * @param {() => void} [opts.onSetupDone] – A callback that invokes when the preliminary setup has been done.
    * @param {() => void} [opts.onReady] - A callback that invokes on video decode
    * @param {(number) => void} [opts.onChange] - A callback that invokes on video percentage change
    * @param {boolean} [opts.debug=false] - Whether to print debug stats to the console
@@ -60,6 +61,7 @@ class ScrollyVideo {
     debug = false,
     easing = (x) => x,
     posterSrcUrl,
+    onSetupDone = () => {},
   }) {
     // Make sure that we have a DOM
     if (typeof document !== 'object') {
@@ -101,6 +103,7 @@ class ScrollyVideo {
     this.trackScroll = trackScroll;
     this.lockScroll = lockScroll;
     this.onReady = onReady;
+    this.onSetupDone = onSetupDone;
     this.onChange = onChange;
     this.debug = debug;
     this.easing = easing;
@@ -274,7 +277,7 @@ class ScrollyVideo {
       );
     }
 
-    this.onReady();
+    this.onSetupDone();
   }
 
   /**
@@ -420,12 +423,14 @@ class ScrollyVideo {
     if (!this.useWebCodecs) {
       if (this.debug)
         console.warn('Cannot perform video decode: `useWebCodes` disabled');
+      this.onReady()
       return;
     }
 
     if (!this.src) {
       if (this.debug)
         console.warn('Cannot perform video decode: no `src` found');
+      this.onReady()
       return;
     }
 
@@ -462,6 +467,7 @@ class ScrollyVideo {
 
           case 'CANVAS_CREATED':
             this.useCanvas = true;
+            this.onReady()
             break;
 
           case 'CURRENT_TIME':
@@ -487,6 +493,7 @@ class ScrollyVideo {
       // move back to video
       this.useCanvas = false;
       this.decodeWorker.terminate();
+      this.onReady()
     }
 
     this.decodeWorker.onerror = (event) => {
@@ -496,12 +503,12 @@ class ScrollyVideo {
       // fall back to video
       this.useCanvas = false;
       this.decodeWorker.terminate();
+
     };
 
     // Try to cover all the bases when a user opens another page
     window.addEventListener('popstate', () => {this.decodeWorker.terminate();});
     window.addEventListener('pagehide', () => {this.decodeWorker.terminate();});
-    this.onReady();
   }
 
   /**
