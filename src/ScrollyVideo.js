@@ -129,7 +129,7 @@ class ScrollyVideo {
     this.layoutContainer.classList.add('scrollyvideo-layout-container');
     this.layoutContainer.style.position = 'relative';
     this.layoutContainer.style.width = '100%';
-    this.layoutContainer.style.height = '100vh';
+    this.layoutContainer.style.height = '100%';
 
     this.container.appendChild(this.layoutContainer);
     this.layoutContainer.appendChild(this.video);
@@ -138,10 +138,6 @@ class ScrollyVideo {
     this.container.classList.add('scrollyvideo-container');
     this.container.style.display = 'block';
     this.container.style.position = 'sticky';
-    this.container.style.top = '0';
-    this.container.style.width = '100%';
-    this.container.style.height = '100vh';
-    this.container.style.overflow = 'hidden';
 
     // Setting CSS properties for cover
     this.setCoverStyle(this.video);
@@ -406,8 +402,6 @@ class ScrollyVideo {
    * @param {HTMLVideoElement | HTMLCanvasElement} el
    */
   setCoverStyle(el) {
-    el.style.width = '100%';
-    el.style.height = '100%';
     el.style.objectFit = this.objectFit;
   }
 
