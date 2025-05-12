@@ -166,7 +166,7 @@ class ScrollyVideo {
 
     const uaparser = new UAParser();
     const mobileOS = uaparser.getOS();
-    this.isMacOS = mobileOS.name === 'macOS';
+    this.isMacOS = mobileOS.name === 'Mac OS';
     this.isWindows = mobileOS.name === 'Windows';
     this.isAndroid = mobileOS.name === 'Android';
     this.isIOS = mobileOS.name === 'iOS';
