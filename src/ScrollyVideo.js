@@ -45,6 +45,10 @@ class ScrollyVideo {
    * @param {(number) => number} [opts.easing=(x)=>x] - When using `transitionSpeed`, which easing
    *   function to use to smooth out the animation
    * @param {string} [opts.posterSrcUrl] - An URL for an image to be used as the poster of the video
+   * @param {number} [opts.sizeLimitDesktopMac=4] - Size limit for decoding video on desktop Mac devices.
+   * @param {number} [opts.sizeLimitDesktopWindows=4] - Size limit for decoding video on desktop Windows devices.
+   * @param {number} [opts.sizeLimitMobileIOS=2] - Size limit for decoding video on mobile iOS devices.
+   * @param {number} [opts.sizeLimitMobileAndroid=1] - Size limit for decoding video on mobile Android devices.
    */
   constructor({
     src,
@@ -62,6 +66,10 @@ class ScrollyVideo {
     easing = (x) => x,
     posterSrcUrl,
     onSetupDone = () => {},
+    sizeLimitDesktopMac = 4,
+    sizeLimitDesktopWindows = 4,
+    sizeLimitMobileIOS = 2,
+    sizeLimitMobileAndroid = 1,
   }) {
     // Make sure that we have a DOM
     if (typeof document !== 'object') {
@@ -107,6 +115,10 @@ class ScrollyVideo {
     this.onChange = onChange;
     this.debug = debug;
     this.easing = easing;
+    this.sizeLimitDesktopMac = sizeLimitDesktopMac;
+    this.sizeLimitDesktopWindows = sizeLimitDesktopWindows;
+    this.sizeLimitMobileIOS = sizeLimitMobileIOS;
+    this.sizeLimitMobileAndroid = sizeLimitMobileAndroid;
 
     // Create the initial video object. Even if we are going to use webcodecs,
     // we start with a paused video object
@@ -152,10 +164,18 @@ class ScrollyVideo {
     this.isSafari = browserEngine.name === 'WebKit';
     if (debug && this.isSafari) console.info('Safari browser detected');
 
-		const mobileOS = new UAParser().getOS()
-	  this.isAndroid = mobileOS.name === 'Android';
-		this.isIOS = mobileOS.name === 'iOS';
-		this.isMobileDevice = this.isAndroid || this.isIOS
+    const uaparser = new UAParser();
+    const mobileOS = uaparser.getOS();
+    this.isMacOS = mobileOS.name === 'macOS';
+    this.isWindows = mobileOS.name === 'Windows';
+    this.isAndroid = mobileOS.name === 'Android';
+    this.isIOS = mobileOS.name === 'iOS';
+
+    const deviceType = uaparser.getDevice().type;
+    this.isMobileDevice =
+      deviceType === 'mobile' ||
+      deviceType === 'tablet' ||
+      deviceType === 'smarttv';
 
     // Initialize state variables
     this.currentTime = 0; // Saves the currentTime of the video, synced with this.video.currentTime
@@ -253,29 +273,37 @@ class ScrollyVideo {
             30 *
             this.video.duration;
           const sizeInGb = size / 1024 / 1024 / 1024;
-          console.info(`NZZ Video Scroller: Prospective size of decoded video: ${sizeInGb}GB`);
+          console.info(
+            `NZZ Video Scroller: Prospective size of decoded video: ${sizeInGb}GB`,
+          );
           console.table({
             sizeInGb,
             duration: this.video.duration,
             assumedFrames: this.video.duration * 30,
             videoWidth: this.video.videoWidth,
             videoHeight: this.video.videoHeight,
-          })
+          });
 
           /**
            * Set size limit for decoding video.
-           * Use lower limit on Android devices, because they are prone to crash.
+           * Use lower limit on Android or mobile devices, because they
+           * tend to have limited memory and are prone to crash.
            * @type {number}
            */
-          let sizelimit = 8
-          if (this.isAndroid) sizelimit = 2
+          let sizelimit = this.sizeLimitDesktopWindows;
+          if (this.isMacOS) sizelimit = this.sizeLimitDesktopMac;
+          if (this.isMobileDevice) sizelimit = this.sizeLimitMobileAndroid;
+          if (this.isIOS) sizelimit = this.sizeLimitMobileIOS;
 
           // Calls decode video to attempt webcodecs method
           if (sizeInGb < sizelimit && window.Worker) {
             this.decodeWorker = new DecodeWorker();
-            this.decodeVideo();
+            this.decodeVideo({sizelimit});
           } else {
-            if (sizeInGb > sizelimit) console.info('NZZ Video Scroller: Video is likely too big to decode, falling back to video mode.')
+            if (sizeInGb > sizelimit)
+              console.info(
+                'NZZ Video Scroller: Video is likely too big to decode, falling back to video mode.',
+              );
             this.useCanvas = false;
           }
         },
@@ -341,17 +369,17 @@ class ScrollyVideo {
       if (this.debug) console.log('Turning canvas off; falling back to video');
       // synchronise the current time with the worker, in case it exists
       if (this.decodeWorker) {
-	      this.decodeWorker.postMessage({
-		      message: 'GET_CURRENT_TIME',
-		      debug: this.debug,
-	      });
+        this.decodeWorker.postMessage({
+          message: 'GET_CURRENT_TIME',
+          debug: this.debug,
+        });
       }
 
       // Show the video
       //this.video.style.display = 'block';
-	    if (this.canvas) {
-		    this.canvas.style.display = 'none';
-	    }
+      if (this.canvas) {
+        this.canvas.style.display = 'none';
+      }
     }
     // Update video to the latest requested frame
     // restart transition
@@ -427,18 +455,18 @@ class ScrollyVideo {
   /**
    * Uses webCodecs to decode the video into frames
    */
-  async decodeVideo() {
+  async decodeVideo({ sizelimit = this.sizeLimitDesktopWindows}) {
     if (!this.useWebCodecs) {
       if (this.debug)
         console.warn('Cannot perform video decode: `useWebCodes` disabled');
-      this.onReady()
+      this.onReady();
       return;
     }
 
     if (!this.src) {
       if (this.debug)
         console.warn('Cannot perform video decode: no `src` found');
-      this.onReady()
+      this.onReady();
       return;
     }
 
@@ -447,6 +475,7 @@ class ScrollyVideo {
         src: this.src,
         debug: this.debug,
         message: 'REQUEST_DECODE',
+        sizelimit,
       });
       this.decodeWorker.onmessage = (event) => {
         const { message } = event.data;
@@ -475,7 +504,7 @@ class ScrollyVideo {
 
           case 'CANVAS_CREATED':
             this.useCanvas = true;
-            this.onReady()
+            this.onReady();
             break;
 
           case 'CURRENT_TIME':
@@ -501,7 +530,7 @@ class ScrollyVideo {
       // move back to video
       this.useCanvas = false;
       this.decodeWorker.terminate();
-      this.onReady()
+      this.onReady();
     }
 
     this.decodeWorker.onerror = (event) => {
@@ -511,12 +540,15 @@ class ScrollyVideo {
       // fall back to video
       this.useCanvas = false;
       this.decodeWorker.terminate();
-
     };
 
     // Try to cover all the bases when a user opens another page
-    window.addEventListener('popstate', () => {this.decodeWorker.terminate();});
-    window.addEventListener('pagehide', () => {this.decodeWorker.terminate();});
+    window.addEventListener('popstate', () => {
+      this.decodeWorker.terminate();
+    });
+    window.addEventListener('pagehide', () => {
+      this.decodeWorker.terminate();
+    });
   }
 
   /**
@@ -801,14 +833,14 @@ class ScrollyVideo {
     ) {
       // moving forward in time, and we haven't reached the previous target yet
       // So we skip forward
-      if (this.debug) console.debug('Skipping forward.')
+      if (this.debug) console.debug('Skipping forward.');
       this.currentTime = oldTargetTime;
     }
 
     if (this.targetTime < this.currentTime) {
       // moving backward – we jump
-      if (this.debug) console.debug('Moving backwards, jumping.')
-      this.transitionToTargetTime({...options, jump: true})
+      if (this.debug) console.debug('Moving backwards, jumping.');
+      this.transitionToTargetTime({ ...options, jump: true });
       return;
     }
 

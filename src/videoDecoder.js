@@ -92,12 +92,13 @@ const getExtradata = (avccBox) => {
  * @param EncodedVideoChunk
  * @param emitFrame
  * @param debug
+ * @param sizelimit
  * @returns {Promise<unknown>}
  */
 const decodeVideo = (
   src,
   emitFrame,
-  { VideoDecoder, EncodedVideoChunk, debug },
+  { VideoDecoder, EncodedVideoChunk, debug, sizelimit },
 ) =>
   new Promise((resolve, reject) => {
     if (debug) console.info('Decoding video from', src);
@@ -151,7 +152,7 @@ const decodeVideo = (
             videoHeight: vTrack.video.height
           })
 
-          if(sizeInGb > 8) {
+          if(sizeInGb > sizelimit) {
             throw new Error('Video is too big to decode. Fall back to video mode.');
           }
 
@@ -244,9 +245,10 @@ const frameThreshold = 0.05;
  *
  * @param {string} src
  * @param {boolean} [debug=false]
+ * @param {number} [sizelimit=8]
  * @returns {Promise<void>}
  */
-function processVideoSrc(src, debug = false) {
+function processVideoSrc(src, debug = false, sizelimit = 8) {
   // If our browser supports WebCodecs natively
   if (
     typeof VideoDecoder === 'function' &&
@@ -264,6 +266,7 @@ function processVideoSrc(src, debug = false) {
         VideoDecoder,
         EncodedVideoChunk,
         debug,
+        sizelimit
       },
     )
       .then(() => {
@@ -476,8 +479,8 @@ self.onmessage = (event) => {
 
   switch (message) {
     case 'REQUEST_DECODE':
-      const { src } = event.data;
-      processVideoSrc(src, frames, debug);
+      const { src, sizelimit } = event.data;
+      processVideoSrc(src, debug, sizelimit);
       break;
 
     case 'SETUP_CANVAS':
