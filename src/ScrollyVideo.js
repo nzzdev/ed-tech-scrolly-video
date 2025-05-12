@@ -305,6 +305,7 @@ class ScrollyVideo {
                 'NZZ Video Scroller: Video is likely too big to decode, falling back to video mode.',
               );
             this.useCanvas = false;
+            this.onReady();
           }
         },
         { once: true },
