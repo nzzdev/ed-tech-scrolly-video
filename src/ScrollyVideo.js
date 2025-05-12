@@ -266,6 +266,17 @@ class ScrollyVideo {
       this.video.addEventListener(
         'loadedmetadata',
         () => {
+                    /**
+           * Set size limit for decoding video.
+           * Use lower limit on Android or mobile devices, because they
+           * tend to have limited memory and are prone to crash.
+           * @type {number}
+           */
+          let sizelimit = this.sizeLimitDesktopWindows;
+          if (this.isMacOS) sizelimit = this.sizeLimitDesktopMac;
+          if (this.isMobileDevice) sizelimit = this.sizeLimitMobileAndroid;
+          if (this.isIOS) sizelimit = this.sizeLimitMobileIOS;
+
           // calculate the prospective size of the decoded video
           const size =
             this.video.videoWidth *
@@ -278,22 +289,12 @@ class ScrollyVideo {
           );
           console.table({
             sizeInGb,
+            sizelimit,
             duration: this.video.duration,
             assumedFrames: this.video.duration * 30,
             videoWidth: this.video.videoWidth,
             videoHeight: this.video.videoHeight,
           });
-
-          /**
-           * Set size limit for decoding video.
-           * Use lower limit on Android or mobile devices, because they
-           * tend to have limited memory and are prone to crash.
-           * @type {number}
-           */
-          let sizelimit = this.sizeLimitDesktopWindows;
-          if (this.isMacOS) sizelimit = this.sizeLimitDesktopMac;
-          if (this.isMobileDevice) sizelimit = this.sizeLimitMobileAndroid;
-          if (this.isIOS) sizelimit = this.sizeLimitMobileIOS;
 
           // Calls decode video to attempt webcodecs method
           if (sizeInGb < sizelimit && window.Worker) {

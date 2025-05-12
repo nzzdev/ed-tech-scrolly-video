@@ -146,6 +146,7 @@ const decodeVideo = (
           console.info(`NZZ Video Scroller: Actual decoded video size: ${sizeInGb} GB`);
           console.table({
             sizeInGb,
+            sizelimit,
             duration: vTrack.duration,
             frames: vTrack.nb_samples,
             videoWidth: vTrack.video.width,
