@@ -420,6 +420,8 @@ class ScrollyVideo {
     el.style.left = '0';
     el.style.bottom = '0';
     el.style.right = '0';
+    el.style.width = '100%';
+    el.style.height = '100%';
   }
 
   /**
