@@ -288,7 +288,7 @@ function processVideoSrc(src, debug = false, sizelimit = 8) {
         frames = [];
 
         if (debug) console.error('Decoding was not successful.', err);
-				throw err;
+				setTimeout(() => {throw err})
       });
   }
 
