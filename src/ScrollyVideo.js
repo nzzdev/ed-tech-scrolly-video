@@ -71,7 +71,7 @@ class ScrollyVideo {
     sizeLimitDesktopWindows = 4,
     sizeLimitMobileIOS = 2,
     sizeLimitMobileAndroid = 1,
-    framerate = 30
+    framerate = 30,
   }) {
     // Make sure that we have a DOM
     if (typeof document !== 'object') {
@@ -269,7 +269,7 @@ class ScrollyVideo {
       this.video.addEventListener(
         'loadedmetadata',
         () => {
-                    /**
+          /**
            * Set size limit for decoding video.
            * Use lower limit on Android or mobile devices, because they
            * tend to have limited memory and are prone to crash.
@@ -303,7 +303,7 @@ class ScrollyVideo {
           // Calls decode video to attempt webcodecs method
           if (sizeInGb < sizelimit && window.Worker) {
             this.decodeWorker = new DecodeWorker();
-            this.decodeVideo({sizelimit});
+            this.decodeVideo({ sizelimit });
           } else {
             if (sizeInGb > sizelimit)
               console.info(
@@ -461,7 +461,7 @@ class ScrollyVideo {
   /**
    * Uses webCodecs to decode the video into frames
    */
-  async decodeVideo({ sizelimit = this.sizeLimitDesktopWindows}) {
+  async decodeVideo({ sizelimit = this.sizeLimitDesktopWindows }) {
     if (!this.useWebCodecs) {
       if (this.debug)
         console.warn('Cannot perform video decode: `useWebCodes` disabled');
@@ -476,6 +476,65 @@ class ScrollyVideo {
       return;
     }
 
+    // Listen to errors
+    this.decodeWorker.addEventListener('error', (event) => {
+      if (this.debug)
+        console.error('Decode Worker encountered an error', event);
+
+      // fall back to video
+      this.useCanvas = false;
+      this.decodeWorker.terminate();
+      this.onReady();
+    });
+
+    // Listen to responses
+    this.decodeWorker.addEventListener('message', (event) => {
+      const { message } = event.data;
+      if (this.debug)
+        console.debug(`Received message from worker.`, message, event.data);
+
+      switch (message) {
+        case 'DECODING_SUCCESS':
+          // The video has been decoded, so we can set up the canvas
+          this.canvas = document.createElement('canvas');
+          const offscreen = this.canvas.transferControlToOffscreen();
+          this.layoutContainer.append(this.canvas);
+          this.setElementExpansion(this.canvas);
+          this.setCoverStyle(this.canvas);
+          this.decodeWorker.postMessage(
+            {
+              canvas: offscreen,
+              debug: this.debug,
+              message: 'SETUP_CANVAS',
+              duration: this.video.duration,
+              currentTime: this.currentTime,
+            },
+            [offscreen],
+          );
+          break;
+
+        case 'CANVAS_CREATED':
+          this.useCanvas = true;
+          this.onReady();
+          break;
+
+        case 'CURRENT_TIME':
+          this.currentTime = event.data.currentTime;
+
+          // getting the current time is the last thing we should get when we disable the use of canvas
+          // in this case the worker should be terminated
+          if (!this.useCanvas) {
+            this.decodeWorker.terminate();
+          }
+
+          break;
+
+        default:
+          if (this.debug)
+            console.info('Message was not be processed.', message);
+      }
+    });
+
     try {
       this.decodeWorker.postMessage({
         src: this.src,
@@ -483,52 +542,6 @@ class ScrollyVideo {
         message: 'REQUEST_DECODE',
         sizelimit,
       });
-      this.decodeWorker.onmessage = (event) => {
-        const { message } = event.data;
-        if (this.debug)
-          console.debug(`Received message from worker.`, message, event.data);
-
-        switch (message) {
-          case 'DECODING_SUCCESS':
-            // The video has been decoded, so we can set up the canvas
-            this.canvas = document.createElement('canvas');
-            const offscreen = this.canvas.transferControlToOffscreen();
-            this.layoutContainer.append(this.canvas);
-            this.setElementExpansion(this.canvas);
-            this.setCoverStyle(this.canvas);
-            this.decodeWorker.postMessage(
-              {
-                canvas: offscreen,
-                debug: this.debug,
-                message: 'SETUP_CANVAS',
-                duration: this.video.duration,
-                currentTime: this.currentTime,
-              },
-              [offscreen],
-            );
-            break;
-
-          case 'CANVAS_CREATED':
-            this.useCanvas = true;
-            this.onReady();
-            break;
-
-          case 'CURRENT_TIME':
-            this.currentTime = event.data.currentTime;
-
-            // getting the current time is the last thing we should get when we disable the use of canvas
-            // in this case the worker should be terminated
-            if (!this.useCanvas) {
-              this.decodeWorker.terminate();
-            }
-
-            break;
-
-          default:
-            if (this.debug)
-              console.info('Message was not be processed.', message);
-        }
-      };
     } catch (error) {
       if (this.debug)
         console.error('Error encountered while decoding video', error);
@@ -538,15 +551,6 @@ class ScrollyVideo {
       this.decodeWorker.terminate();
       this.onReady();
     }
-
-    this.decodeWorker.onerror = (event) => {
-      if (this.debug)
-        console.error('Decode Worker encountered an error', event);
-
-      // fall back to video
-      this.useCanvas = false;
-      this.decodeWorker.terminate();
-    };
 
     // Try to cover all the bases when a user opens another page
     window.addEventListener('popstate', () => {

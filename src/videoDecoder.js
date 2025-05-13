@@ -154,7 +154,7 @@ const decodeVideo = (
           })
 
           if(sizeInGb > sizelimit) {
-            throw new Error('Video is too big to decode. Fall back to video mode.');
+            reject(new Error('Video is too big to decode. Fall back to video mode.'));
           }
 
           // Gets the avccbox used for reading extradata
