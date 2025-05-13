@@ -49,6 +49,7 @@ class ScrollyVideo {
    * @param {number} [opts.sizeLimitDesktopWindows=4] - Size limit for decoding video on desktop Windows devices.
    * @param {number} [opts.sizeLimitMobileIOS=2] - Size limit for decoding video on mobile iOS devices.
    * @param {number} [opts.sizeLimitMobileAndroid=1] - Size limit for decoding video on mobile Android devices.
+   * @param {number} [opts.framerate=30] - Frame rate to be used for calculating the prospective video sizes
    */
   constructor({
     src,
@@ -70,6 +71,7 @@ class ScrollyVideo {
     sizeLimitDesktopWindows = 4,
     sizeLimitMobileIOS = 2,
     sizeLimitMobileAndroid = 1,
+    framerate = 30
   }) {
     // Make sure that we have a DOM
     if (typeof document !== 'object') {
@@ -119,6 +121,7 @@ class ScrollyVideo {
     this.sizeLimitDesktopWindows = sizeLimitDesktopWindows;
     this.sizeLimitMobileIOS = sizeLimitMobileIOS;
     this.sizeLimitMobileAndroid = sizeLimitMobileAndroid;
+    this.framerate = framerate;
 
     // Create the initial video object. Even if we are going to use webcodecs,
     // we start with a paused video object
@@ -281,7 +284,7 @@ class ScrollyVideo {
           const size =
             this.video.videoWidth *
             this.video.videoHeight *
-            30 *
+            this.framerate *
             this.video.duration;
           const sizeInGb = size / 1024 / 1024 / 1024;
           console.info(
@@ -291,7 +294,8 @@ class ScrollyVideo {
             sizeInGb,
             sizelimit,
             duration: this.video.duration,
-            assumedFrames: this.video.duration * 30,
+            framerate: this.framerate,
+            assumedFrames: this.video.duration * this.framerate,
             videoWidth: this.video.videoWidth,
             videoHeight: this.video.videoHeight,
           });
